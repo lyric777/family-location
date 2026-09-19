@@ -1,1 +1,26 @@
-{"expo":{"name":"Family Location","slug":"family-location","version":"0.1.0","orientation":"portrait","scheme":"familylocation","userInterfaceStyle":"automatic","newArchEnabled":true,"android":{"package":"com.lyric777.familylocation"},"plugins":["expo-router"],"updates":{"enabled":true,"checkAutomatically":"ON_LOAD","fallbackToCacheTimeout":0},"runtimeVersion":{"policy":"appVersion"},"experiments":{"typedRoutes":true}}}
+{
+  "expo": {
+    "name": "Family Location",
+    "slug": "family-location",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "familylocation",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.lyric777.familylocation"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": "0.1.0",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
