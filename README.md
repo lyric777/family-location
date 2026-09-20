@@ -65,6 +65,8 @@ OTA is for compatible JavaScript and asset changes. Changes to native Android co
 - Local diagnostics and battery tests
 - Reboot and network-change recovery
 
+Milestone 1 is implemented: a local Expo Module starts an Android foreground service, receives Fused Location Provider updates, persists the latest sample locally, and exposes service diagnostics to React Native. See `docs/phase-1.md` for the acceptance test.
+
 No map and no P2P yet. The goal is to prove that location collection is reliable enough on real devices.
 
 ### Phase 2 - Local history + map
@@ -125,4 +127,4 @@ The app will not implement covert microphone activation or hidden listening.
 
 ## Status
 
-Architecture/bootstrap phase.
+Phase 1 in progress — foreground location service milestone ready for emulator validation.
