@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.familylocation'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.familylocation"
+
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  implementation 'androidx.core:core-ktx:1.17.0'
+  implementation 'com.google.android.gms:play-services-location:21.3.0'
+}
