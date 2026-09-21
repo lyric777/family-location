@@ -9,20 +9,15 @@ import android.content.pm.PackageManager
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+import com.google.android.gms.location.*
 
 class FamilyLocationService : Service() {
   private lateinit var fusedLocationClient: FusedLocationProviderClient
 
   private val locationCallback = object : LocationCallback() {
     override fun onLocationResult(result: LocationResult) {
-      result.lastLocation?.let { location ->
-        FamilyLocationStore.saveLocation(applicationContext, location)
+      result.lastLocation?.let {
+        FamilyLocationStore.saveLocation(applicationContext, it, fromCallback = true)
       }
     }
   }
@@ -35,74 +30,84 @@ class FamilyLocationService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     startForeground(NOTIFICATION_ID, buildNotification())
+    FamilyLocationStore.resetDiagnostics(applicationContext)
 
-    if (!hasLocationPermission()) {
+    val granted = hasLocationPermission()
+    FamilyLocationStore.setPermissionGranted(applicationContext, granted)
+    if (!granted) {
       FamilyLocationStore.setRunning(applicationContext, false)
+      FamilyLocationStore.setRequestState(applicationContext, "NO_PERMISSION")
+      FamilyLocationStore.setError(applicationContext, "Location permission is not granted")
       stopSelf()
       return START_NOT_STICKY
     }
 
     FamilyLocationStore.setRunning(applicationContext, true)
+    FamilyLocationStore.setRequestState(applicationContext, "REGISTERING")
+    bootstrapLastLocation()
 
-    val request = LocationRequest.Builder(
-      Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-      UPDATE_INTERVAL_MS
-    )
-      .setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL_MS)
-      .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
+    val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L)
+      .setMinUpdateIntervalMillis(15_000L)
+      .setMinUpdateDistanceMeters(20f)
       .build()
 
     fusedLocationClient.removeLocationUpdates(locationCallback)
-    fusedLocationClient.requestLocationUpdates(request, locationCallback, mainLooper)
-
+    try {
+      fusedLocationClient.requestLocationUpdates(request, locationCallback, mainLooper)
+        .addOnSuccessListener {
+          FamilyLocationStore.setRequestState(applicationContext, "REGISTERED")
+          FamilyLocationStore.setError(applicationContext, null)
+        }
+        .addOnFailureListener { e ->
+          FamilyLocationStore.setRequestState(applicationContext, "FAILED")
+          FamilyLocationStore.setError(applicationContext, "requestLocationUpdates: " + e.javaClass.simpleName + ": " + (e.message ?: "unknown error"))
+        }
+    } catch (e: SecurityException) {
+      FamilyLocationStore.setRequestState(applicationContext, "FAILED")
+      FamilyLocationStore.setError(applicationContext, "requestLocationUpdates: SecurityException: " + (e.message ?: "unknown error"))
+    }
     return START_STICKY
+  }
+
+  private fun bootstrapLastLocation() {
+    try {
+      fusedLocationClient.lastLocation
+        .addOnSuccessListener { location ->
+          if (location != null) FamilyLocationStore.saveLocation(applicationContext, location, fromCallback = false)
+        }
+        .addOnFailureListener { e ->
+          FamilyLocationStore.setError(applicationContext, "lastLocation: " + e.javaClass.simpleName + ": " + (e.message ?: "unknown error"))
+        }
+    } catch (e: SecurityException) {
+      FamilyLocationStore.setError(applicationContext, "lastLocation: SecurityException: " + (e.message ?: "unknown error"))
+    }
   }
 
   override fun onDestroy() {
     fusedLocationClient.removeLocationUpdates(locationCallback)
     FamilyLocationStore.setRunning(applicationContext, false)
+    FamilyLocationStore.setRequestState(applicationContext, "STOPPED")
     super.onDestroy()
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
-  private fun hasLocationPermission(): Boolean {
-    return ActivityCompat.checkSelfPermission(
-      this,
-      Manifest.permission.ACCESS_FINE_LOCATION
-    ) == PackageManager.PERMISSION_GRANTED ||
-      ActivityCompat.checkSelfPermission(
-        this,
-        Manifest.permission.ACCESS_COARSE_LOCATION
-      ) == PackageManager.PERMISSION_GRANTED
-  }
+  private fun hasLocationPermission() =
+    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+      ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
   private fun createNotificationChannel() {
     val manager = getSystemService(NotificationManager::class.java)
-    val channel = NotificationChannel(
-      CHANNEL_ID,
-      "Family location sharing",
-      NotificationManager.IMPORTANCE_LOW
-    ).apply {
-      description = "Shows while family location sharing is active"
-    }
-    manager.createNotificationChannel(channel)
+    manager.createNotificationChannel(NotificationChannel("family_location_sharing", "Family location sharing", NotificationManager.IMPORTANCE_LOW))
   }
 
-  private fun buildNotification() =
-    NotificationCompat.Builder(this, CHANNEL_ID)
-      .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-      .setContentTitle("Family Location")
-      .setContentText("Location sharing is running")
-      .setOngoing(true)
-      .setPriority(NotificationCompat.PRIORITY_LOW)
-      .build()
+  private fun buildNotification() = NotificationCompat.Builder(this, "family_location_sharing")
+    .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+    .setContentTitle("Family Location")
+    .setContentText("Location sharing is running")
+    .setOngoing(true)
+    .setPriority(NotificationCompat.PRIORITY_LOW)
+    .build()
 
-  companion object {
-    private const val CHANNEL_ID = "family_location_sharing"
-    private const val NOTIFICATION_ID = 1001
-    private const val UPDATE_INTERVAL_MS = 30_000L
-    private const val MIN_UPDATE_INTERVAL_MS = 15_000L
-    private const val MIN_UPDATE_DISTANCE_METERS = 20f
-  }
+  companion object { private const val NOTIFICATION_ID = 1001 }
 }
