@@ -46,12 +46,11 @@ class FamilyLocationService : Service() {
     FamilyLocationStore.setRequestState(applicationContext, "REGISTERING")
     bootstrapLastLocation()
 
-    val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L)
-      .setMinUpdateIntervalMillis(15_000L)
-      .setMinUpdateDistanceMeters(20f)
+    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
+      .setMinUpdateIntervalMillis(2_000L)
+      .setMinUpdateDistanceMeters(0f)
       .build()
 
-    fusedLocationClient.removeLocationUpdates(locationCallback)
     try {
       fusedLocationClient.requestLocationUpdates(request, locationCallback, mainLooper)
         .addOnSuccessListener {
