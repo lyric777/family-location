@@ -61,6 +61,26 @@ export default function HomeScreen() {
         return;
       }
 
+      if (Platform.Version >= 33) {
+        const notificationPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+          {
+            title: 'Show location sharing status',
+            message:
+              'Allow notifications so Android can clearly show when family location sharing is running.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Not now',
+          },
+        );
+
+        if (notificationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert(
+            'Notifications are off',
+            'Location sharing can still run, but Android may not show its ongoing notification in the notification drawer.',
+          );
+        }
+      }
+
       await FamilyLocation.start();
       refresh();
     } catch (error) {
