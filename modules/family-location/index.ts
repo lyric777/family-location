@@ -1,11 +1,10 @@
 import { requireNativeModule } from 'expo';
 
+export type LocationMode = 'IDLE' | 'MOVING' | 'LIVE';
+
 export type NativeLocationSnapshot = {
   running: boolean;
-  permissionGranted: boolean;
-  requestState: string;
-  lastError: string | null;
-  lastCallbackAtMs: number | null;
+  mode: LocationMode;
   latitude: number | null;
   longitude: number | null;
   accuracyMeters: number | null;
@@ -15,6 +14,7 @@ export type NativeLocationSnapshot = {
 type FamilyLocationNativeModule = {
   start(): Promise<void>;
   stop(): Promise<void>;
+  setMode(mode: LocationMode): Promise<void>;
   getSnapshot(): NativeLocationSnapshot;
 };
 

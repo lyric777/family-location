@@ -10,28 +10,30 @@ class FamilyLocationModule : Module() {
     Name("FamilyLocation")
 
     AsyncFunction("start") {
-      val context = requireNotNull(appContext.reactContext) {
-        "React context is unavailable"
-      }
-
+      val context = requireNotNull(appContext.reactContext)
       val intent = Intent(context, FamilyLocationService::class.java)
+        .putExtra(FamilyLocationService.EXTRA_MODE, FamilyLocationStore.getMode(context))
       ContextCompat.startForegroundService(context, intent)
     }
 
     AsyncFunction("stop") {
-      val context = requireNotNull(appContext.reactContext) {
-        "React context is unavailable"
-      }
-
+      val context = requireNotNull(appContext.reactContext)
       context.stopService(Intent(context, FamilyLocationService::class.java))
       FamilyLocationStore.setRunning(context, false)
     }
 
-    Function("getSnapshot") {
-      val context = requireNotNull(appContext.reactContext) {
-        "React context is unavailable"
+    AsyncFunction("setMode") { mode: String ->
+      val context = requireNotNull(appContext.reactContext)
+      FamilyLocationStore.setMode(context, mode.uppercase())
+      if (FamilyLocationStore.snapshot(context)["running"] == true) {
+        val intent = Intent(context, FamilyLocationService::class.java)
+          .putExtra(FamilyLocationService.EXTRA_MODE, mode)
+        ContextCompat.startForegroundService(context, intent)
       }
+    }
 
+    Function("getSnapshot") {
+      val context = requireNotNull(appContext.reactContext)
       FamilyLocationStore.snapshot(context)
     }
   }
