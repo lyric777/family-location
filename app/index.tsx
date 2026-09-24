@@ -17,6 +17,9 @@ const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
   running: false,
   mode: 'MOVING',
+  activeMode: null,
+  requestState: 'IDLE',
+  lastError: null,
   latitude: null,
   longitude: null,
   accuracyMeters: null,
@@ -109,6 +112,10 @@ export default function HomeScreen() {
           <Text style={styles.hint}>
             IDLE · 5 min / 100 m   MOVING · 30 s / 20 m   LIVE · 5 s / 0 m
           </Text>
+          <Text style={styles.meta}>
+            Native request: {snapshot.requestState} · active {snapshot.activeMode ?? '—'}
+          </Text>
+          {snapshot.lastError ? <Text style={styles.error}>Native error: {snapshot.lastError}</Text> : null}
 
           <Text style={styles.label}>Last location</Text>
           <Text style={styles.value}>
@@ -160,6 +167,7 @@ const styles = StyleSheet.create({
   hint: { fontSize: 11, lineHeight: 16, opacity: 0.45 },
   value: { fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
   meta: { fontSize: 14, opacity: 0.55 },
+  error: { fontSize: 12, lineHeight: 17, padding: 10, borderRadius: 8, backgroundColor: '#f5e8e8' },
   button: { marginTop: 10, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   startButton: { backgroundColor: '#171717' },
   stopButton: { backgroundColor: '#4b1f1f' },
