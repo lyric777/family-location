@@ -7,6 +7,9 @@ object FamilyLocationStore {
   private const val PREFS = "family_location_service"
   private const val KEY_RUNNING = "running"
   private const val KEY_MODE = "mode"
+  private const val KEY_ACTIVE_MODE = "active_mode"
+  private const val KEY_REQUEST_STATE = "request_state"
+  private const val KEY_LAST_ERROR = "last_error"
   private const val KEY_LATITUDE = "latitude"
   private const val KEY_LONGITUDE = "longitude"
   private const val KEY_ACCURACY = "accuracy"
@@ -21,6 +24,13 @@ object FamilyLocationStore {
 
   fun getMode(context: Context): String =
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_MODE, "MOVING") ?: "MOVING"
+
+  fun setRequestState(context: Context, state: String, activeMode: String? = null, error: String? = null) {
+    val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_REQUEST_STATE, state)
+    if (activeMode == null) editor.remove(KEY_ACTIVE_MODE) else editor.putString(KEY_ACTIVE_MODE, activeMode)
+    if (error == null) editor.remove(KEY_LAST_ERROR) else editor.putString(KEY_LAST_ERROR, error)
+    editor.apply()
+  }
 
   fun saveLocation(context: Context, location: Location, fromCallback: Boolean = true) {
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -38,6 +48,9 @@ object FamilyLocationStore {
     return mapOf(
       "running" to prefs.getBoolean(KEY_RUNNING, false),
       "mode" to (prefs.getString(KEY_MODE, "MOVING") ?: "MOVING"),
+      "activeMode" to prefs.getString(KEY_ACTIVE_MODE, null),
+      "requestState" to (prefs.getString(KEY_REQUEST_STATE, "IDLE") ?: "IDLE"),
+      "lastError" to prefs.getString(KEY_LAST_ERROR, null),
       "latitude" to if (hasLocation) Double.fromBits(prefs.getLong(KEY_LATITUDE, 0L)) else null,
       "longitude" to if (hasLocation) Double.fromBits(prefs.getLong(KEY_LONGITUDE, 0L)) else null,
       "accuracyMeters" to if (hasLocation) prefs.getFloat(KEY_ACCURACY, 0f).toDouble() else null,
