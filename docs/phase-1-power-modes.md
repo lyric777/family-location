@@ -29,3 +29,11 @@ Start sharing and test:
 5. Put the Activity in the background or swipe it from Recents while in LIVE/MOVING and confirm location updates continue.
 
 These intervals are requests to Android, not exact timers.
+
+
+## Emulator validation status
+
+- LIVE: continuous injected-location updates verified.
+- MOVING: native request switching reaches REGISTERED / active MOVING; Android Emulator GPS injection does not reliably exercise the balanced-power provider path, so movement updates are deferred to physical-device validation.
+- IDLE: mode switching and foreground-service survival verified; battery behavior is deferred to physical-device testing.
+- Next validation target: install the development build on a physical Android device and test MOVING while walking with the screen locked.
