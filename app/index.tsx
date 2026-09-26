@@ -20,6 +20,9 @@ const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
   activeMode: null,
   requestState: 'IDLE',
   lastError: null,
+  autoMode: false,
+  detectedActivity: 'UNKNOWN',
+  activityConfidence: 0,
   latitude: null,
   longitude: null,
   accuracyMeters: null,
@@ -48,6 +51,9 @@ export default function HomeScreen() {
       if (location !== PermissionsAndroid.RESULTS.GRANTED) {
         Alert.alert('Location permission required');
         return;
+      }
+      if (Platform.Version >= 29) {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION);
       }
       if (Platform.Version >= 33) {
         await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
@@ -94,6 +100,23 @@ export default function HomeScreen() {
               {snapshot.running ? 'RUNNING' : 'STOPPED'}
             </Text>
           </View>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Automatic mode</Text>
+            <Pressable
+              onPress={async () => {
+                await FamilyLocation.setAutoMode(!snapshot.autoMode);
+                refresh();
+              }}
+              style={[styles.autoButton, snapshot.autoMode && styles.autoButtonActive]}>
+              <Text style={[styles.autoText, snapshot.autoMode && styles.modeTextActive]}>
+                {snapshot.autoMode ? 'AUTO ON' : 'AUTO OFF'}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.meta}>
+            Activity: {snapshot.detectedActivity} · {snapshot.activityConfidence}%
+          </Text>
 
           <Text style={styles.label}>Location mode</Text>
           <View style={styles.modeRow}>
@@ -160,6 +183,9 @@ const styles = StyleSheet.create({
   stopped: { fontSize: 12, fontWeight: '800', opacity: 0.4 },
   label: { marginTop: 8, fontSize: 12, fontWeight: '700', opacity: 0.45, textTransform: 'uppercase' },
   modeRow: { flexDirection: 'row', gap: 8 },
+  autoButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#eeeeea' },
+  autoButtonActive: { backgroundColor: '#171717' },
+  autoText: { fontSize: 11, fontWeight: '800' },
   modeButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: '#eeeeea' },
   modeButtonActive: { backgroundColor: '#171717' },
   modeText: { fontSize: 12, fontWeight: '800' },
