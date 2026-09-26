@@ -11,9 +11,7 @@ class FamilyLocationModule : Module() {
 
     AsyncFunction("start") {
       val context = requireNotNull(appContext.reactContext)
-      val intent = Intent(context, FamilyLocationService::class.java)
-        .putExtra(FamilyLocationService.EXTRA_MODE, FamilyLocationStore.getMode(context))
-      ContextCompat.startForegroundService(context, intent)
+      ContextCompat.startForegroundService(context, Intent(context, FamilyLocationService::class.java).putExtra(FamilyLocationService.EXTRA_MODE, FamilyLocationStore.getMode(context)))
     }
 
     AsyncFunction("stop") {
@@ -24,11 +22,18 @@ class FamilyLocationModule : Module() {
 
     AsyncFunction("setMode") { mode: String ->
       val context = requireNotNull(appContext.reactContext)
+      FamilyLocationStore.setAutoMode(context, false)
       FamilyLocationStore.setMode(context, mode.uppercase())
       if (FamilyLocationStore.snapshot(context)["running"] == true) {
-        val intent = Intent(context, FamilyLocationService::class.java)
-          .putExtra(FamilyLocationService.EXTRA_MODE, mode)
-        ContextCompat.startForegroundService(context, intent)
+        ContextCompat.startForegroundService(context, Intent(context, FamilyLocationService::class.java).putExtra(FamilyLocationService.EXTRA_MODE, mode))
+      }
+    }
+
+    AsyncFunction("setAutoMode") { enabled: Boolean ->
+      val context = requireNotNull(appContext.reactContext)
+      FamilyLocationStore.setAutoMode(context, enabled)
+      if (FamilyLocationStore.snapshot(context)["running"] == true) {
+        ContextCompat.startForegroundService(context, Intent(context, FamilyLocationService::class.java).putExtra(FamilyLocationService.EXTRA_MODE, FamilyLocationStore.getMode(context)))
       }
     }
 
