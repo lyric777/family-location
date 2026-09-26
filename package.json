@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "doctor": "npx expo-doctor",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "android:preview": "expo export --platform android && cd android && gradlew.bat app:assembleRelease"
   },
   "dependencies": {
     "expo": "~54.0.0",
