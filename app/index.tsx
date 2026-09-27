@@ -23,6 +23,9 @@ const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
   autoMode: false,
   detectedActivity: 'UNKNOWN',
   activityConfidence: 0,
+  activityRecognitionState: 'IDLE',
+  activityRecognitionError: null,
+  activityPermissionGranted: false,
   latitude: null,
   longitude: null,
   accuracyMeters: null,
@@ -117,6 +120,12 @@ export default function HomeScreen() {
           <Text style={styles.meta}>
             Activity: {snapshot.detectedActivity} · {snapshot.activityConfidence}%
           </Text>
+          <Text style={styles.meta}>
+            Recognition: {snapshot.activityRecognitionState} · permission {snapshot.activityPermissionGranted ? 'GRANTED' : 'MISSING'}
+          </Text>
+          {snapshot.activityRecognitionError ? (
+            <Text style={styles.error}>Activity error: {snapshot.activityRecognitionError}</Text>
+          ) : null}
 
           <Text style={styles.label}>Location mode</Text>
           <View style={styles.modeRow}>
