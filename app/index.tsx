@@ -55,9 +55,6 @@ export default function HomeScreen() {
         Alert.alert('Location permission required');
         return;
       }
-      if (Platform.Version >= 29) {
-        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION);
-      }
       if (Platform.Version >= 33) {
         await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
       }
@@ -118,13 +115,13 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <Text style={styles.meta}>
-            Activity: {snapshot.detectedActivity} · {snapshot.activityConfidence}%
+            Motion: {snapshot.detectedActivity} · {snapshot.activityConfidence}%
           </Text>
           <Text style={styles.meta}>
-            Recognition: {snapshot.activityRecognitionState} · permission {snapshot.activityPermissionGranted ? 'GRANTED' : 'MISSING'}
+            Motion sensor: {snapshot.activityRecognitionState}
           </Text>
           {snapshot.activityRecognitionError ? (
-            <Text style={styles.error}>Activity error: {snapshot.activityRecognitionError}</Text>
+            <Text style={styles.error}>Motion error: {snapshot.activityRecognitionError}</Text>
           ) : null}
 
           <Text style={styles.label}>Location mode</Text>
