@@ -1,29 +1,50 @@
 package expo.modules.familylocation
 
 import android.Manifest
-import android.app.*
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.*
+import kotlin.math.sqrt
 
-class FamilyLocationService : Service() {
-  private lateinit var fusedLocationClient: FusedLocationProviderClient
-  private lateinit var activityClient: ActivityRecognitionClient
-  private var registrationGeneration = 0
+class FamilyLocationService : Service(), SensorEventListener {
+  private lateinit var locationManager: LocationManager
+  private lateinit var sensorManager: SensorManager
+  private var accelerometer: Sensor? = null
+  private var activeProvider: String? = null
+  private var lastMotionAtElapsed = 0L
+  private var motionSamples = 0
+  private var stillSamples = 0
 
-  private val locationCallback = object : LocationCallback() {
-    override fun onLocationResult(result: LocationResult) {
-      result.lastLocation?.let { FamilyLocationStore.saveLocation(applicationContext, it) }
+  private val locationListener = object : LocationListener {
+    override fun onLocationChanged(location: Location) {
+      FamilyLocationStore.saveLocation(applicationContext, location)
     }
+    override fun onProviderEnabled(provider: String) = Unit
+    override fun onProviderDisabled(provider: String) = Unit
+    @Deprecated("Deprecated in Java")
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
   }
 
   override fun onCreate() {
     super.onCreate()
-    fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-    activityClient = ActivityRecognition.getClient(this)
+    locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     createNotificationChannel()
   }
 
@@ -41,96 +62,120 @@ class FamilyLocationService : Service() {
     FamilyLocationStore.setRunning(applicationContext, true)
     bootstrapLastLocation()
     switchLocationRequest(requestedMode)
-    updateActivityRecognition()
+    updateMotionDetection()
     return START_STICKY
   }
 
-  private fun updateActivityRecognition() {
-    if (!FamilyLocationStore.isAutoMode(applicationContext)) {
-      FamilyLocationStore.setActivityRegistration(applicationContext, hasActivityPermission(), "DISABLED")
-      activityClient.removeActivityUpdates(activityPendingIntent())
-      return
-    }
-
-    val granted = hasActivityPermission()
-    if (!granted) {
-      FamilyLocationStore.setActivityRegistration(applicationContext, false, "NO_PERMISSION", "Physical activity permission is not granted")
-      return
-    }
-
-    FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERING")
-    activityClient.requestActivityUpdates(30_000L, activityPendingIntent())
-      .addOnSuccessListener {
-        FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERED")
-      }
-      .addOnFailureListener { e ->
-        FamilyLocationStore.setActivityRegistration(
-          applicationContext,
-          true,
-          "FAILED",
-          e.javaClass.simpleName + ": " + (e.message ?: "unknown error")
-        )
-      }
-  }
-
-  private fun hasActivityPermission() =
-    android.os.Build.VERSION.SDK_INT < 29 ||
-      ActivityCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
-
-  private fun activityPendingIntent(): PendingIntent = PendingIntent.getBroadcast(
-    this, 2001,
-    Intent(this, ActivityRecognitionReceiver::class.java),
-    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-  )
-
   private fun switchLocationRequest(mode: String) {
-    val generation = ++registrationGeneration
     FamilyLocationStore.setRequestState(applicationContext, "UNREGISTERING")
-    fusedLocationClient.removeLocationUpdates(locationCallback)
-      .addOnSuccessListener {
-        if (generation == registrationGeneration) registerLocationRequest(mode, generation)
-      }
-      .addOnFailureListener { e ->
-        if (generation == registrationGeneration) FamilyLocationStore.setRequestState(applicationContext, "FAILED", error = "removeLocationUpdates: " + (e.message ?: e.javaClass.simpleName))
-      }
-  }
-
-  private fun registerLocationRequest(mode: String, generation: Int) {
-    if (generation != registrationGeneration) return
+    locationManager.removeUpdates(locationListener)
     FamilyLocationStore.setRequestState(applicationContext, "REGISTERING")
+
+    val (minTimeMs, minDistanceM, preferGps) = when (mode) {
+      "IDLE" -> Triple(5 * 60_000L, 100f, false)
+      "LIVE" -> Triple(5_000L, 0f, true)
+      else -> Triple(30_000L, 20f, false)
+    }
+
     try {
-      fusedLocationClient.requestLocationUpdates(buildRequest(mode), locationCallback, mainLooper)
-        .addOnSuccessListener {
-          if (generation == registrationGeneration) FamilyLocationStore.setRequestState(applicationContext, "REGISTERED", activeMode = mode)
-        }
-        .addOnFailureListener { e ->
-          if (generation == registrationGeneration) FamilyLocationStore.setRequestState(applicationContext, "FAILED", error = "requestLocationUpdates: " + (e.message ?: e.javaClass.simpleName))
-        }
+      val provider = chooseProvider(preferGps)
+      if (provider == null) {
+        FamilyLocationStore.setRequestState(applicationContext, "FAILED", error = "No enabled Android location provider")
+        return
+      }
+      activeProvider = provider
+      locationManager.requestLocationUpdates(provider, minTimeMs, minDistanceM, locationListener)
+      FamilyLocationStore.setRequestState(applicationContext, "REGISTERED", activeMode = mode)
     } catch (e: SecurityException) {
       FamilyLocationStore.setRequestState(applicationContext, "FAILED", error = "SecurityException: " + (e.message ?: "unknown error"))
+    } catch (e: IllegalArgumentException) {
+      FamilyLocationStore.setRequestState(applicationContext, "FAILED", error = "LocationManager: " + (e.message ?: "unknown error"))
     }
   }
 
-  private fun buildRequest(mode: String) = when (mode) {
-    "IDLE" -> LocationRequest.Builder(Priority.PRIORITY_LOW_POWER, 5 * 60_000L).setMinUpdateIntervalMillis(2 * 60_000L).setMinUpdateDistanceMeters(100f).build()
-    "LIVE" -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L).setMinUpdateIntervalMillis(2_000L).setMinUpdateDistanceMeters(0f).build()
-    else -> LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L).setMinUpdateIntervalMillis(15_000L).setMinUpdateDistanceMeters(20f).build()
+  private fun chooseProvider(preferGps: Boolean): String? {
+    val gps = LocationManager.GPS_PROVIDER
+    val network = LocationManager.NETWORK_PROVIDER
+    if (preferGps && locationManager.isProviderEnabled(gps)) return gps
+    if (locationManager.isProviderEnabled(network)) return network
+    if (locationManager.isProviderEnabled(gps)) return gps
+    return null
   }
 
   private fun bootstrapLastLocation() {
-    try { fusedLocationClient.lastLocation.addOnSuccessListener { if (it != null) FamilyLocationStore.saveLocation(applicationContext, it, false) } } catch (_: SecurityException) {}
+    if (!hasLocationPermission()) return
+    val candidates = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+      .mapNotNull { provider ->
+        try { locationManager.getLastKnownLocation(provider) } catch (_: Exception) { null }
+      }
+    candidates.maxByOrNull { it.time }?.let { FamilyLocationStore.saveLocation(applicationContext, it, false) }
   }
 
+  private fun updateMotionDetection() {
+    sensorManager.unregisterListener(this)
+    if (!FamilyLocationStore.isAutoMode(applicationContext)) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, true, "DISABLED")
+      return
+    }
+
+    val sensor = accelerometer
+    if (sensor == null) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, false, "FAILED", "Accelerometer is unavailable")
+      return
+    }
+
+    motionSamples = 0
+    stillSamples = 0
+    FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERED")
+    sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+  }
+
+  override fun onSensorChanged(event: SensorEvent) {
+    if (!FamilyLocationStore.isAutoMode(applicationContext)) return
+    val x = event.values[0]
+    val y = event.values[1]
+    val z = event.values[2]
+    val magnitude = sqrt(x * x + y * y + z * z)
+    val deviation = kotlin.math.abs(magnitude - SensorManager.GRAVITY_EARTH)
+
+    if (deviation >= MOTION_THRESHOLD) {
+      motionSamples++
+      stillSamples = 0
+      lastMotionAtElapsed = SystemClock.elapsedRealtime()
+      FamilyLocationStore.setActivity(applicationContext, "MOTION", motionConfidence())
+      if (motionSamples >= MOTION_SAMPLES_TO_MOVE && FamilyLocationStore.getMode(applicationContext) != "MOVING") {
+        applyAutomaticMode("MOVING")
+      }
+    } else {
+      motionSamples = 0
+      stillSamples++
+      val quietFor = SystemClock.elapsedRealtime() - lastMotionAtElapsed
+      FamilyLocationStore.setActivity(applicationContext, "STILL", stillConfidence(quietFor))
+      if (stillSamples >= STILL_SAMPLES_TO_IDLE && quietFor >= STILL_MIN_DURATION_MS && FamilyLocationStore.getMode(applicationContext) != "IDLE") {
+        applyAutomaticMode("IDLE")
+      }
+    }
+  }
+
+  private fun applyAutomaticMode(mode: String) {
+    FamilyLocationStore.setMode(applicationContext, mode)
+    switchLocationRequest(mode)
+  }
+
+  private fun motionConfidence() = (motionSamples * 20).coerceAtMost(100)
+  private fun stillConfidence(quietFor: Long) = (quietFor / 600).toInt().coerceIn(0, 100)
+  override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
   override fun onDestroy() {
-    registrationGeneration++
-    fusedLocationClient.removeLocationUpdates(locationCallback)
-    activityClient.removeActivityUpdates(activityPendingIntent())
+    locationManager.removeUpdates(locationListener)
+    sensorManager.unregisterListener(this)
     FamilyLocationStore.setRunning(applicationContext, false)
     FamilyLocationStore.setRequestState(applicationContext, "STOPPED")
     super.onDestroy()
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
+
   private fun hasLocationPermission() =
     ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
       ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -140,13 +185,22 @@ class FamilyLocationService : Service() {
   private fun createNotificationChannel() = getSystemService(NotificationManager::class.java).createNotificationChannel(
     NotificationChannel(CHANNEL_ID, "Family location sharing", NotificationManager.IMPORTANCE_LOW)
   )
+
   private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-    .setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("Family Location")
-    .setContentText("Location sharing is running").setOngoing(true).setPriority(NotificationCompat.PRIORITY_LOW).build()
+    .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+    .setContentTitle("Family Location")
+    .setContentText("Location sharing is running")
+    .setOngoing(true)
+    .setPriority(NotificationCompat.PRIORITY_LOW)
+    .build()
 
   companion object {
     const val EXTRA_MODE = "mode"
     private const val CHANNEL_ID = "family_location_sharing"
     private const val NOTIFICATION_ID = 1001
+    private const val MOTION_THRESHOLD = 1.35f
+    private const val MOTION_SAMPLES_TO_MOVE = 3
+    private const val STILL_SAMPLES_TO_IDLE = 40
+    private const val STILL_MIN_DURATION_MS = 30_000L
   }
 }
