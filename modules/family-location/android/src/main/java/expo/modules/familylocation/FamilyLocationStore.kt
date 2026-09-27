@@ -13,6 +13,9 @@ object FamilyLocationStore {
   private const val KEY_AUTO_MODE = "auto_mode"
   private const val KEY_ACTIVITY = "detected_activity"
   private const val KEY_ACTIVITY_CONFIDENCE = "activity_confidence"
+  private const val KEY_ACTIVITY_STATE = "activity_state"
+  private const val KEY_ACTIVITY_ERROR = "activity_error"
+  private const val KEY_ACTIVITY_PERMISSION = "activity_permission"
   private const val KEY_LATITUDE = "latitude"
   private const val KEY_LONGITUDE = "longitude"
   private const val KEY_ACCURACY = "accuracy"
@@ -28,7 +31,20 @@ object FamilyLocationStore {
   fun isAutoMode(context: Context): Boolean = prefs(context).getBoolean(KEY_AUTO_MODE, false)
 
   fun setActivity(context: Context, activity: String, confidence: Int) =
-    prefs(context).edit().putString(KEY_ACTIVITY, activity).putInt(KEY_ACTIVITY_CONFIDENCE, confidence).apply()
+    prefs(context).edit()
+      .putString(KEY_ACTIVITY, activity)
+      .putInt(KEY_ACTIVITY_CONFIDENCE, confidence)
+      .putString(KEY_ACTIVITY_STATE, "RECEIVING")
+      .remove(KEY_ACTIVITY_ERROR)
+      .apply()
+
+  fun setActivityRegistration(context: Context, permissionGranted: Boolean, state: String, error: String? = null) {
+    val editor = prefs(context).edit()
+      .putBoolean(KEY_ACTIVITY_PERMISSION, permissionGranted)
+      .putString(KEY_ACTIVITY_STATE, state)
+    if (error == null) editor.remove(KEY_ACTIVITY_ERROR) else editor.putString(KEY_ACTIVITY_ERROR, error)
+    editor.apply()
+  }
 
   fun setRequestState(context: Context, state: String, activeMode: String? = null, error: String? = null) {
     val editor = prefs(context).edit().putString(KEY_REQUEST_STATE, state)
@@ -59,6 +75,9 @@ object FamilyLocationStore {
       "autoMode" to p.getBoolean(KEY_AUTO_MODE, false),
       "detectedActivity" to (p.getString(KEY_ACTIVITY, "UNKNOWN") ?: "UNKNOWN"),
       "activityConfidence" to p.getInt(KEY_ACTIVITY_CONFIDENCE, 0),
+      "activityRecognitionState" to (p.getString(KEY_ACTIVITY_STATE, "IDLE") ?: "IDLE"),
+      "activityRecognitionError" to p.getString(KEY_ACTIVITY_ERROR, null),
+      "activityPermissionGranted" to p.getBoolean(KEY_ACTIVITY_PERMISSION, false),
       "latitude" to if (hasLocation) Double.fromBits(p.getLong(KEY_LATITUDE, 0L)) else null,
       "longitude" to if (hasLocation) Double.fromBits(p.getLong(KEY_LONGITUDE, 0L)) else null,
       "accuracyMeters" to if (hasLocation) p.getFloat(KEY_ACCURACY, 0f).toDouble() else null,

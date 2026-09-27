@@ -47,12 +47,35 @@ class FamilyLocationService : Service() {
 
   private fun updateActivityRecognition() {
     if (!FamilyLocationStore.isAutoMode(applicationContext)) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, hasActivityPermission(), "DISABLED")
       activityClient.removeActivityUpdates(activityPendingIntent())
       return
     }
-    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) return
+
+    val granted = hasActivityPermission()
+    if (!granted) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, false, "NO_PERMISSION", "Physical activity permission is not granted")
+      return
+    }
+
+    FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERING")
     activityClient.requestActivityUpdates(30_000L, activityPendingIntent())
+      .addOnSuccessListener {
+        FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERED")
+      }
+      .addOnFailureListener { e ->
+        FamilyLocationStore.setActivityRegistration(
+          applicationContext,
+          true,
+          "FAILED",
+          e.javaClass.simpleName + ": " + (e.message ?: "unknown error")
+        )
+      }
   }
+
+  private fun hasActivityPermission() =
+    android.os.Build.VERSION.SDK_INT < 29 ||
+      ActivityCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
 
   private fun activityPendingIntent(): PendingIntent = PendingIntent.getBroadcast(
     this, 2001,
