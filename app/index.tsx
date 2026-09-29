@@ -26,6 +26,9 @@ const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
   activityRecognitionState: 'IDLE',
   activityRecognitionError: null,
   activityPermissionGranted: false,
+  serviceStartedAtMs: null,
+  sensorRegisteredAtMs: null,
+  lastSensorEventAtMs: null,
   latitude: null,
   longitude: null,
   accuracyMeters: null,
@@ -120,6 +123,9 @@ export default function HomeScreen() {
           <Text style={styles.meta}>
             Motion sensor: {snapshot.activityRecognitionState}
           </Text>
+          <Text style={styles.hint}>
+            Service {formatTime(snapshot.serviceStartedAtMs)} · sensor {formatTime(snapshot.sensorRegisteredAtMs)} · event {formatTime(snapshot.lastSensorEventAtMs)}
+          </Text>
           {snapshot.activityRecognitionError ? (
             <Text style={styles.error}>Motion error: {snapshot.activityRecognitionError}</Text>
           ) : null}
@@ -174,6 +180,11 @@ export default function HomeScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+
+function formatTime(value: number | null) {
+  return value ? new Date(value).toLocaleTimeString() : '—';
 }
 
 const styles = StyleSheet.create({
