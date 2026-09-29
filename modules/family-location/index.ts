@@ -3,7 +3,7 @@ export type LocationMode = 'IDLE' | 'MOVING' | 'LIVE';
 export type RequestState = 'IDLE' | 'UNREGISTERING' | 'REGISTERING' | 'REGISTERED' | 'FAILED' | 'STOPPED';
 export type NativeLocationSnapshot = {
   running: boolean; mode: LocationMode; activeMode: LocationMode | null; requestState: RequestState; lastError: string | null;
-  autoMode: boolean; detectedActivity: string; activityConfidence: number; activityRecognitionState: string; activityRecognitionError: string | null; activityPermissionGranted: boolean;
+  autoMode: boolean; detectedActivity: string; activityConfidence: number; activityRecognitionState: string; activityRecognitionError: string | null; activityPermissionGranted: boolean; serviceStartedAtMs: number | null; sensorRegisteredAtMs: number | null; lastSensorEventAtMs: number | null;
   latitude: number | null; longitude: number | null; accuracyMeters: number | null; timestampMs: number | null;
 };
 type FamilyLocationNativeModule = {

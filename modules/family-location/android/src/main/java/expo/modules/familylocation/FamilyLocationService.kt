@@ -46,6 +46,7 @@ class FamilyLocationService : Service(), SensorEventListener {
     sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
     accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     createNotificationChannel()
+    FamilyLocationStore.markServiceStarted(applicationContext)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -126,12 +127,19 @@ class FamilyLocationService : Service(), SensorEventListener {
 
     motionSamples = 0
     stillSamples = 0
-    FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERED")
-    sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+    lastMotionAtElapsed = SystemClock.elapsedRealtime()
+    val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+    if (registered) {
+      FamilyLocationStore.markSensorRegistered(applicationContext)
+      FamilyLocationStore.setActivityRegistration(applicationContext, true, "REGISTERED")
+    } else {
+      FamilyLocationStore.setActivityRegistration(applicationContext, false, "FAILED", "SensorManager rejected accelerometer registration")
+    }
   }
 
   override fun onSensorChanged(event: SensorEvent) {
     if (!FamilyLocationStore.isAutoMode(applicationContext)) return
+    FamilyLocationStore.markSensorEvent(applicationContext)
     val x = event.values[0]
     val y = event.values[1]
     val z = event.values[2]

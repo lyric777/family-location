@@ -16,6 +16,9 @@ object FamilyLocationStore {
   private const val KEY_ACTIVITY_STATE = "activity_state"
   private const val KEY_ACTIVITY_ERROR = "activity_error"
   private const val KEY_ACTIVITY_PERMISSION = "activity_permission"
+  private const val KEY_SERVICE_STARTED_AT = "service_started_at"
+  private const val KEY_SENSOR_REGISTERED_AT = "sensor_registered_at"
+  private const val KEY_LAST_SENSOR_EVENT_AT = "last_sensor_event_at"
   private const val KEY_LATITUDE = "latitude"
   private const val KEY_LONGITUDE = "longitude"
   private const val KEY_ACCURACY = "accuracy"
@@ -25,6 +28,9 @@ object FamilyLocationStore {
   private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
   fun setRunning(context: Context, running: Boolean) = prefs(context).edit().putBoolean(KEY_RUNNING, running).apply()
+  fun markServiceStarted(context: Context) = prefs(context).edit().putLong(KEY_SERVICE_STARTED_AT, System.currentTimeMillis()).apply()
+  fun markSensorRegistered(context: Context) = prefs(context).edit().putLong(KEY_SENSOR_REGISTERED_AT, System.currentTimeMillis()).apply()
+  fun markSensorEvent(context: Context) = prefs(context).edit().putLong(KEY_LAST_SENSOR_EVENT_AT, System.currentTimeMillis()).apply()
   fun setMode(context: Context, mode: String) = prefs(context).edit().putString(KEY_MODE, mode).apply()
   fun getMode(context: Context): String = prefs(context).getString(KEY_MODE, "MOVING") ?: "MOVING"
   fun setAutoMode(context: Context, enabled: Boolean) = prefs(context).edit().putBoolean(KEY_AUTO_MODE, enabled).apply()
@@ -78,6 +84,9 @@ object FamilyLocationStore {
       "activityRecognitionState" to (p.getString(KEY_ACTIVITY_STATE, "IDLE") ?: "IDLE"),
       "activityRecognitionError" to p.getString(KEY_ACTIVITY_ERROR, null),
       "activityPermissionGranted" to p.getBoolean(KEY_ACTIVITY_PERMISSION, false),
+      "serviceStartedAtMs" to p.getLong(KEY_SERVICE_STARTED_AT, 0L).takeIf { it > 0L }?.toDouble(),
+      "sensorRegisteredAtMs" to p.getLong(KEY_SENSOR_REGISTERED_AT, 0L).takeIf { it > 0L }?.toDouble(),
+      "lastSensorEventAtMs" to p.getLong(KEY_LAST_SENSOR_EVENT_AT, 0L).takeIf { it > 0L }?.toDouble(),
       "latitude" to if (hasLocation) Double.fromBits(p.getLong(KEY_LATITUDE, 0L)) else null,
       "longitude" to if (hasLocation) Double.fromBits(p.getLong(KEY_LONGITUDE, 0L)) else null,
       "accuracyMeters" to if (hasLocation) p.getFloat(KEY_ACCURACY, 0f).toDouble() else null,
