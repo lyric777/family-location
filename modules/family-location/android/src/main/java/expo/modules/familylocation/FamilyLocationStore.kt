@@ -40,7 +40,6 @@ object FamilyLocationStore {
     prefs(context).edit()
       .putString(KEY_ACTIVITY, activity)
       .putInt(KEY_ACTIVITY_CONFIDENCE, confidence)
-      .putString(KEY_ACTIVITY_STATE, "RECEIVING")
       .remove(KEY_ACTIVITY_ERROR)
       .apply()
 
