@@ -15,6 +15,7 @@ import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 
 const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
+  sharingEnabled: false,
   running: false,
   mode: 'MOVING',
   activeMode: null,
@@ -25,8 +26,8 @@ const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
   activityConfidence: 0,
   activityRecognitionState: 'IDLE',
   activityRecognitionError: null,
-  activityPermissionGranted: false,
   serviceStartedAtMs: null,
+  serviceStartReason: 'NONE',
   sensorRegisteredAtMs: null,
   lastSensorEventAtMs: null,
   latitude: null,
@@ -124,7 +125,7 @@ export default function HomeScreen() {
             Motion sensor: {snapshot.activityRecognitionState}
           </Text>
           <Text style={styles.hint}>
-            Service {formatTime(snapshot.serviceStartedAtMs)} · sensor {formatTime(snapshot.sensorRegisteredAtMs)} · event {formatTime(snapshot.lastSensorEventAtMs)}
+            Service {formatTime(snapshot.serviceStartedAtMs)} ({snapshot.serviceStartReason}) · sensor {formatTime(snapshot.sensorRegisteredAtMs)} · event {formatTime(snapshot.lastSensorEventAtMs)}
           </Text>
           {snapshot.activityRecognitionError ? (
             <Text style={styles.error}>Motion error: {snapshot.activityRecognitionError}</Text>
