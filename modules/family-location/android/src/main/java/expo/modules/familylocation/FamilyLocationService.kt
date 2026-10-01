@@ -200,6 +200,8 @@ class FamilyLocationService : Service(), SensorEventListener {
       .maxByOrNull { it.time }?.let { FamilyLocationStore.saveLocation(applicationContext, it, false) }
   }
 
+  override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
   override fun onDestroy() {
     stopRuntime()
     super.onDestroy()
