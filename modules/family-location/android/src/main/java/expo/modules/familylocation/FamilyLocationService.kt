@@ -1,24 +1,12 @@
 package expo.modules.familylocation
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
-import android.content.Context
-import android.content.Intent
+import android.app.*
+import android.content.*
 import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import android.hardware.TriggerEvent
-import android.hardware.TriggerEventListener
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
-import android.os.Bundle
-import android.os.IBinder
-import android.os.SystemClock
+import android.hardware.*
+import android.location.*
+import android.os.*
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import kotlin.math.abs
@@ -35,9 +23,7 @@ class FamilyLocationService : Service(), SensorEventListener {
   private var triggerArmed = false
 
   private val locationListener = object : LocationListener {
-    override fun onLocationChanged(location: Location) {
-      FamilyLocationStore.saveLocation(applicationContext, location)
-    }
+    override fun onLocationChanged(location: Location) = FamilyLocationStore.saveLocation(applicationContext, location)
     override fun onProviderEnabled(provider: String) = Unit
     override fun onProviderDisabled(provider: String) = Unit
     @Deprecated("Deprecated in Java")
@@ -49,9 +35,9 @@ class FamilyLocationService : Service(), SensorEventListener {
       triggerArmed = false
       FamilyLocationStore.markSensorEvent(applicationContext)
       FamilyLocationStore.setActivity(applicationContext, "SIGNIFICANT_MOTION", 100)
-      if (FamilyLocationStore.isAutoMode(applicationContext)) {
-        applyAutomaticMode("MOVING")
-        configureMotionDetection("MOVING")
+      if (FamilyLocationStore.isSharingEnabled(applicationContext) && FamilyLocationStore.isAutoMode(applicationContext)) {
+        FamilyLocationStore.setMode(applicationContext, "MOVING")
+        initializeRuntime("MOVING")
       }
     }
   }
@@ -63,11 +49,21 @@ class FamilyLocationService : Service(), SensorEventListener {
     accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     significantMotion = sensorManager.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)
     createNotificationChannel()
-    FamilyLocationStore.markServiceStarted(applicationContext)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    val stickyRestart = intent == null
+    val reason = if (stickyRestart) "STICKY_RESTART" else intent.getStringExtra(EXTRA_START_REASON) ?: "EXPLICIT"
+    FamilyLocationStore.markServiceStarted(applicationContext, reason)
+
+    if (!FamilyLocationStore.isSharingEnabled(applicationContext)) {
+      stopRuntime()
+      stopSelf()
+      return START_NOT_STICKY
+    }
+
     startForeground(NOTIFICATION_ID, buildNotification())
+
     if (!hasLocationPermission()) {
       FamilyLocationStore.setRunning(applicationContext, false)
       FamilyLocationStore.setRequestState(applicationContext, "FAILED", error = "Location permission is not granted")
@@ -78,15 +74,34 @@ class FamilyLocationService : Service(), SensorEventListener {
     val requestedMode = normalizeMode(intent?.getStringExtra(EXTRA_MODE) ?: FamilyLocationStore.getMode(applicationContext))
     FamilyLocationStore.setMode(applicationContext, requestedMode)
     FamilyLocationStore.setRunning(applicationContext, true)
-    bootstrapLastLocation()
-    switchLocationRequest(requestedMode)
-    configureMotionDetection(requestedMode)
+    initializeRuntime(requestedMode)
     return START_STICKY
   }
 
-  private fun switchLocationRequest(mode: String) {
-    FamilyLocationStore.setRequestState(applicationContext, "UNREGISTERING")
-    locationManager.removeUpdates(locationListener)
+  private fun initializeRuntime(mode: String) {
+    stopRuntimeRegistrations()
+    bootstrapLastLocation()
+    registerLocation(mode)
+    registerMotion(mode)
+  }
+
+  private fun stopRuntimeRegistrations() {
+    try { locationManager.removeUpdates(locationListener) } catch (_: Exception) {}
+    sensorManager.unregisterListener(this)
+    significantMotion?.let { sensor ->
+      try { sensorManager.cancelTriggerSensor(significantMotionListener, sensor) } catch (_: Exception) {}
+    }
+    triggerArmed = false
+  }
+
+  private fun stopRuntime() {
+    stopRuntimeRegistrations()
+    FamilyLocationStore.setRunning(applicationContext, false)
+    FamilyLocationStore.setRequestState(applicationContext, "STOPPED")
+    FamilyLocationStore.setActivityRegistration(applicationContext, "STOPPED")
+  }
+
+  private fun registerLocation(mode: String) {
     FamilyLocationStore.setRequestState(applicationContext, "REGISTERING")
     val (minTimeMs, minDistanceM, preferGps) = when (mode) {
       "IDLE" -> Triple(5 * 60_000L, 100f, false)
@@ -106,6 +121,69 @@ class FamilyLocationService : Service(), SensorEventListener {
     }
   }
 
+  private fun registerMotion(mode: String) {
+    if (!FamilyLocationStore.isAutoMode(applicationContext)) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, "DISABLED")
+      return
+    }
+    if (mode == "IDLE") armSignificantMotion() else registerMovingAccelerometer()
+  }
+
+  private fun armSignificantMotion() {
+    val sensor = significantMotion
+    if (sensor == null) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, "FAILED", "Significant motion sensor is unavailable")
+      return
+    }
+    triggerArmed = sensorManager.requestTriggerSensor(significantMotionListener, sensor)
+    if (triggerArmed) {
+      FamilyLocationStore.markSensorRegistered(applicationContext)
+      FamilyLocationStore.setActivityRegistration(applicationContext, "TRIGGER_ARMED")
+      FamilyLocationStore.setActivity(applicationContext, "IDLE_WAIT", 100)
+    } else {
+      FamilyLocationStore.setActivityRegistration(applicationContext, "FAILED", "Significant motion trigger registration failed")
+    }
+  }
+
+  private fun registerMovingAccelerometer() {
+    val sensor = accelerometer
+    if (sensor == null) {
+      FamilyLocationStore.setActivityRegistration(applicationContext, "FAILED", "Accelerometer is unavailable")
+      return
+    }
+    motionSamples = 0
+    stillSamples = 0
+    lastMotionAtElapsed = SystemClock.elapsedRealtime()
+    if (sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)) {
+      FamilyLocationStore.markSensorRegistered(applicationContext)
+      FamilyLocationStore.setActivityRegistration(applicationContext, "MOVING_MONITOR")
+    } else {
+      FamilyLocationStore.setActivityRegistration(applicationContext, "FAILED", "Accelerometer registration failed")
+    }
+  }
+
+  override fun onSensorChanged(event: SensorEvent) {
+    if (!FamilyLocationStore.isSharingEnabled(applicationContext) || !FamilyLocationStore.isAutoMode(applicationContext)) return
+    FamilyLocationStore.markSensorEvent(applicationContext)
+    val magnitude = sqrt(event.values[0] * event.values[0] + event.values[1] * event.values[1] + event.values[2] * event.values[2])
+    val deviation = abs(magnitude - SensorManager.GRAVITY_EARTH)
+    if (deviation >= MOTION_THRESHOLD) {
+      motionSamples++
+      stillSamples = 0
+      lastMotionAtElapsed = SystemClock.elapsedRealtime()
+      FamilyLocationStore.setActivity(applicationContext, "MOTION", (motionSamples * 20).coerceAtMost(100))
+    } else {
+      motionSamples = 0
+      stillSamples++
+      val quietFor = SystemClock.elapsedRealtime() - lastMotionAtElapsed
+      FamilyLocationStore.setActivity(applicationContext, "STILL", (quietFor / 600).toInt().coerceIn(0, 100))
+      if (stillSamples >= STILL_SAMPLES_TO_IDLE && quietFor >= STILL_MIN_DURATION_MS && FamilyLocationStore.getMode(applicationContext) == "MOVING") {
+        FamilyLocationStore.setMode(applicationContext, "IDLE")
+        initializeRuntime("IDLE")
+      }
+    }
+  }
+
   private fun chooseProvider(preferGps: Boolean): String? {
     val gps = LocationManager.GPS_PROVIDER
     val network = LocationManager.NETWORK_PROVIDER
@@ -119,99 +197,11 @@ class FamilyLocationService : Service(), SensorEventListener {
     if (!hasLocationPermission()) return
     listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
       .mapNotNull { try { locationManager.getLastKnownLocation(it) } catch (_: Exception) { null } }
-      .maxByOrNull { it.time }
-      ?.let { FamilyLocationStore.saveLocation(applicationContext, it, false) }
+      .maxByOrNull { it.time }?.let { FamilyLocationStore.saveLocation(applicationContext, it, false) }
   }
-
-  private fun configureMotionDetection(mode: String) {
-    sensorManager.unregisterListener(this)
-    if (triggerArmed) {
-      sensorManager.cancelTriggerSensor(significantMotionListener, significantMotion)
-      triggerArmed = false
-    }
-
-    if (!FamilyLocationStore.isAutoMode(applicationContext)) {
-      FamilyLocationStore.setActivityRegistration(applicationContext, true, "DISABLED")
-      return
-    }
-
-    if (mode == "IDLE") {
-      armSignificantMotion()
-    } else {
-      registerMovingAccelerometer()
-    }
-  }
-
-  private fun armSignificantMotion() {
-    val sensor = significantMotion
-    if (sensor == null) {
-      FamilyLocationStore.setActivityRegistration(applicationContext, false, "FAILED", "Significant motion sensor is unavailable")
-      return
-    }
-    triggerArmed = sensorManager.requestTriggerSensor(significantMotionListener, sensor)
-    if (triggerArmed) {
-      FamilyLocationStore.markSensorRegistered(applicationContext)
-      FamilyLocationStore.setActivityRegistration(applicationContext, true, "TRIGGER_ARMED")
-      FamilyLocationStore.setActivity(applicationContext, "IDLE_WAIT", 100)
-    } else {
-      FamilyLocationStore.setActivityRegistration(applicationContext, false, "FAILED", "Significant motion trigger registration failed")
-    }
-  }
-
-  private fun registerMovingAccelerometer() {
-    val sensor = accelerometer
-    if (sensor == null) {
-      FamilyLocationStore.setActivityRegistration(applicationContext, false, "FAILED", "Accelerometer is unavailable")
-      return
-    }
-    motionSamples = 0
-    stillSamples = 0
-    lastMotionAtElapsed = SystemClock.elapsedRealtime()
-    val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-    if (registered) {
-      FamilyLocationStore.markSensorRegistered(applicationContext)
-      FamilyLocationStore.setActivityRegistration(applicationContext, true, "MOVING_MONITOR")
-    } else {
-      FamilyLocationStore.setActivityRegistration(applicationContext, false, "FAILED", "Accelerometer registration failed")
-    }
-  }
-
-  override fun onSensorChanged(event: SensorEvent) {
-    if (!FamilyLocationStore.isAutoMode(applicationContext)) return
-    FamilyLocationStore.markSensorEvent(applicationContext)
-    val magnitude = sqrt(event.values[0] * event.values[0] + event.values[1] * event.values[1] + event.values[2] * event.values[2])
-    val deviation = abs(magnitude - SensorManager.GRAVITY_EARTH)
-
-    if (deviation >= MOTION_THRESHOLD) {
-      motionSamples++
-      stillSamples = 0
-      lastMotionAtElapsed = SystemClock.elapsedRealtime()
-      FamilyLocationStore.setActivity(applicationContext, "MOTION", (motionSamples * 20).coerceAtMost(100))
-    } else {
-      motionSamples = 0
-      stillSamples++
-      val quietFor = SystemClock.elapsedRealtime() - lastMotionAtElapsed
-      FamilyLocationStore.setActivity(applicationContext, "STILL", (quietFor / 600).toInt().coerceIn(0, 100))
-      if (stillSamples >= STILL_SAMPLES_TO_IDLE && quietFor >= STILL_MIN_DURATION_MS && FamilyLocationStore.getMode(applicationContext) == "MOVING") {
-        applyAutomaticMode("IDLE")
-        configureMotionDetection("IDLE")
-      }
-    }
-  }
-
-  private fun applyAutomaticMode(mode: String) {
-    FamilyLocationStore.setMode(applicationContext, mode)
-    switchLocationRequest(mode)
-  }
-
-  override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
   override fun onDestroy() {
-    locationManager.removeUpdates(locationListener)
-    sensorManager.unregisterListener(this)
-    if (triggerArmed) sensorManager.cancelTriggerSensor(significantMotionListener, significantMotion)
-    FamilyLocationStore.setRunning(applicationContext, false)
-    FamilyLocationStore.setRequestState(applicationContext, "STOPPED")
+    stopRuntime()
     super.onDestroy()
   }
 
@@ -228,15 +218,12 @@ class FamilyLocationService : Service(), SensorEventListener {
   )
 
   private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-    .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-    .setContentTitle("Family Location")
-    .setContentText("Location sharing is running")
-    .setOngoing(true)
-    .setPriority(NotificationCompat.PRIORITY_LOW)
-    .build()
+    .setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("Family Location")
+    .setContentText("Location sharing is running").setOngoing(true).setPriority(NotificationCompat.PRIORITY_LOW).build()
 
   companion object {
     const val EXTRA_MODE = "mode"
+    const val EXTRA_START_REASON = "start_reason"
     private const val CHANNEL_ID = "family_location_sharing"
     private const val NOTIFICATION_ID = 1001
     private const val MOTION_THRESHOLD = 1.35f
