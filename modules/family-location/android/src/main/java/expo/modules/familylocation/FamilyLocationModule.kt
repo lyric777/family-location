@@ -11,13 +11,14 @@ class FamilyLocationModule : Module() {
 
     AsyncFunction("start") {
       val context = requireNotNull(appContext.reactContext)
+      FamilyLocationStore.clearStopReason(context)
       FamilyLocationStore.setSharingEnabled(context, true)
       ContextCompat.startForegroundService(context, serviceIntent(context, "USER_START"))
     }
 
     AsyncFunction("stop") {
       val context = requireNotNull(appContext.reactContext)
-      FamilyLocationStore.setSharingEnabled(context, false)
+      FamilyLocationStore.markStopped(context, "USER_STOP")
       context.stopService(Intent(context, FamilyLocationService::class.java))
       FamilyLocationStore.setRunning(context, false)
     }

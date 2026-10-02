@@ -7,6 +7,7 @@ object FamilyLocationStore {
   private const val PREFS = "family_location_service"
   private const val KEY_SHARING_ENABLED = "sharing_enabled"
   private const val KEY_RUNNING = "running"
+  private const val KEY_STOP_REASON = "stop_reason"
   private const val KEY_MODE = "mode"
   private const val KEY_ACTIVE_MODE = "active_mode"
   private const val KEY_REQUEST_STATE = "request_state"
@@ -29,6 +30,14 @@ object FamilyLocationStore {
   private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
   fun setSharingEnabled(context: Context, enabled: Boolean) = prefs(context).edit().putBoolean(KEY_SHARING_ENABLED, enabled).commit()
+  fun markStopped(context: Context, reason: String) = prefs(context).edit()
+    .putBoolean(KEY_SHARING_ENABLED, false)
+    .putBoolean(KEY_RUNNING, false)
+    .putString(KEY_STOP_REASON, reason)
+    .putString(KEY_REQUEST_STATE, "STOPPED")
+    .putString(KEY_ACTIVITY_STATE, "STOPPED")
+    .commit()
+  fun clearStopReason(context: Context) = prefs(context).edit().remove(KEY_STOP_REASON).commit()
   fun isSharingEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_SHARING_ENABLED, false)
   fun setRunning(context: Context, running: Boolean) = prefs(context).edit().putBoolean(KEY_RUNNING, running).apply()
   fun markServiceStarted(context: Context, reason: String) = prefs(context).edit()
@@ -68,6 +77,7 @@ object FamilyLocationStore {
     return mapOf(
       "sharingEnabled" to p.getBoolean(KEY_SHARING_ENABLED, false),
       "running" to p.getBoolean(KEY_RUNNING, false),
+      "stopReason" to p.getString(KEY_STOP_REASON, null),
       "mode" to (p.getString(KEY_MODE, "MOVING") ?: "MOVING"),
       "activeMode" to p.getString(KEY_ACTIVE_MODE, null),
       "requestState" to (p.getString(KEY_REQUEST_STATE, "IDLE") ?: "IDLE"),

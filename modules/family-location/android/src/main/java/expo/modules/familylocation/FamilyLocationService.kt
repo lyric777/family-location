@@ -202,6 +202,14 @@ class FamilyLocationService : Service(), SensorEventListener {
 
   override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
+  override fun onTaskRemoved(rootIntent: Intent?) {
+    FamilyLocationStore.markStopped(applicationContext, "RECENT_SWIPE")
+    stopRuntimeRegistrations()
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopSelf()
+    super.onTaskRemoved(rootIntent)
+  }
+
   override fun onDestroy() {
     stopRuntime()
     super.onDestroy()
