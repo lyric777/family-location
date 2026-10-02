@@ -17,6 +17,7 @@ const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
   sharingEnabled: false,
   running: false,
+  stopReason: null,
   mode: 'MOVING',
   activeMode: null,
   requestState: 'IDLE',
@@ -98,6 +99,14 @@ export default function HomeScreen() {
         </Text>
 
         <View style={styles.card}>
+          {snapshot.stopReason === 'RECENT_SWIPE' ? (
+            <View style={styles.warning}>
+              <Text style={styles.warningTitle}>Location sharing stopped</Text>
+              <Text style={styles.warningText}>
+                Removing Family Location from Recent Apps stops background sharing on this device. Start sharing again and leave the app in Recents while sharing is active.
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.row}>
             <Text style={styles.cardTitle}>Foreground service</Text>
             <Text style={snapshot.running ? styles.running : styles.stopped}>
@@ -167,10 +176,10 @@ export default function HomeScreen() {
 
           <Pressable
             disabled={busy}
-            onPress={snapshot.running ? stopSharing : startSharing}
+            onPress={snapshot.sharingEnabled && snapshot.running ? stopSharing : startSharing}
             style={[styles.button, snapshot.running ? styles.stopButton : styles.startButton]}>
             <Text style={styles.buttonText}>
-              {busy ? 'Working…' : snapshot.running ? 'Stop location sharing' : 'Start location sharing'}
+              {busy ? 'Working…' : snapshot.sharingEnabled && snapshot.running ? 'Stop location sharing' : 'Start location sharing'}
             </Text>
           </Pressable>
         </View>
@@ -212,6 +221,9 @@ const styles = StyleSheet.create({
   value: { fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
   meta: { fontSize: 14, opacity: 0.55 },
   error: { fontSize: 12, lineHeight: 17, padding: 10, borderRadius: 8, backgroundColor: '#f5e8e8' },
+  warning: { padding: 14, borderRadius: 12, backgroundColor: '#fff2d8', gap: 4 },
+  warningTitle: { fontSize: 14, fontWeight: '800' },
+  warningText: { fontSize: 12, lineHeight: 18, opacity: 0.7 },
   button: { marginTop: 10, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   startButton: { backgroundColor: '#171717' },
   stopButton: { backgroundColor: '#4b1f1f' },
