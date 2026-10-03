@@ -46,9 +46,23 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    let mounted = true;
+    const initialize = async () => {
+      if (Platform.OS === 'android') {
+        const shouldResume = await FamilyLocation.consumeResumeSharingIntent();
+        if (shouldResume && mounted) {
+          await startSharing();
+          return;
+        }
+      }
+      refresh();
+    };
+    initialize();
     const timer = setInterval(refresh, 2_000);
-    return () => clearInterval(timer);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
   }, [refresh]);
 
   const startSharing = async () => {
