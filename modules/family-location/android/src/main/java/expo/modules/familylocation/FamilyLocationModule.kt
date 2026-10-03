@@ -17,6 +17,13 @@ class FamilyLocationModule : Module() {
       ContextCompat.startForegroundService(context, serviceIntent(context, "USER_START"))
     }
 
+    AsyncFunction("consumeResumeSharingIntent") {
+      val activity = appContext.currentActivity ?: return@AsyncFunction false
+      val shouldResume = activity.intent?.getBooleanExtra(FamilyLocationService.EXTRA_RESUME_SHARING, false) == true
+      if (shouldResume) activity.intent?.removeExtra(FamilyLocationService.EXTRA_RESUME_SHARING)
+      shouldResume
+    }
+
     AsyncFunction("stop") {
       val context = requireNotNull(appContext.reactContext)
       FamilyLocationStore.markStopped(context, "USER_STOP")
