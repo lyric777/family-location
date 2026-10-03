@@ -13,6 +13,7 @@ class FamilyLocationModule : Module() {
       val context = requireNotNull(appContext.reactContext)
       FamilyLocationStore.clearStopReason(context)
       FamilyLocationStore.setSharingEnabled(context, true)
+      context.getSystemService(android.app.NotificationManager::class.java).cancel(1002)
       ContextCompat.startForegroundService(context, serviceIntent(context, "USER_START"))
     }
 

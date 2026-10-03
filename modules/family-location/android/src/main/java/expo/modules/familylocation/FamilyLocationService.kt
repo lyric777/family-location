@@ -48,7 +48,7 @@ class FamilyLocationService : Service(), SensorEventListener {
     sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
     accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     significantMotion = sensorManager.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)
-    createNotificationChannel()
+    createNotificationChannels()
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -204,6 +204,7 @@ class FamilyLocationService : Service(), SensorEventListener {
 
   override fun onTaskRemoved(rootIntent: Intent?) {
     FamilyLocationStore.markStopped(applicationContext, "RECENT_SWIPE")
+    showResumeSharingNotification()
     stopRuntimeRegistrations()
     stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
@@ -223,9 +224,31 @@ class FamilyLocationService : Service(), SensorEventListener {
 
   private fun normalizeMode(mode: String) = when (mode.uppercase()) { "IDLE" -> "IDLE"; "LIVE" -> "LIVE"; else -> "MOVING" }
 
-  private fun createNotificationChannel() = getSystemService(NotificationManager::class.java).createNotificationChannel(
-    NotificationChannel(CHANNEL_ID, "Family location sharing", NotificationManager.IMPORTANCE_LOW)
-  )
+  private fun createNotificationChannels() {
+    val manager = getSystemService(NotificationManager::class.java)
+    manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Family location sharing", NotificationManager.IMPORTANCE_LOW))
+    manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL_ID, "Family location alerts", NotificationManager.IMPORTANCE_HIGH))
+  }
+
+  private fun showResumeSharingNotification() {
+    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      putExtra(EXTRA_RESUME_SHARING, true)
+    } ?: return
+    val pendingIntent = PendingIntent.getActivity(
+      this, 1002, launchIntent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+      .setSmallIcon(android.R.drawable.ic_dialog_alert)
+      .setContentTitle("Location sharing stopped")
+      .setContentText("Tap to reopen Family Location and resume sharing")
+      .setContentIntent(pendingIntent)
+      .setAutoCancel(true)
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .build()
+    getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, notification)
+  }
 
   private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
     .setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("Family Location")
@@ -234,8 +257,11 @@ class FamilyLocationService : Service(), SensorEventListener {
   companion object {
     const val EXTRA_MODE = "mode"
     const val EXTRA_START_REASON = "start_reason"
+    const val EXTRA_RESUME_SHARING = "resume_sharing"
     private const val CHANNEL_ID = "family_location_sharing"
+    private const val ALERT_CHANNEL_ID = "family_location_alerts"
     private const val NOTIFICATION_ID = 1001
+    private const val ALERT_NOTIFICATION_ID = 1002
     private const val MOTION_THRESHOLD = 1.35f
     private const val STILL_SAMPLES_TO_IDLE = 40
     private const val STILL_MIN_DURATION_MS = 30_000L
