@@ -4,11 +4,11 @@ import {
   PermissionsAndroid,
   Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
 
@@ -104,7 +104,7 @@ export default function HomeScreen() {
     : 'Waiting for first location…';
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.content}>
         <Text style={styles.eyebrow}>PHASE 1 · POWER MODES</Text>
         <Text style={styles.title}>Family Location</Text>
