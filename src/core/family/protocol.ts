@@ -1,0 +1,14 @@
+export const FAMILY_PROTOCOL_VERSION = 1 as const;
+export type DeviceId = string;
+export type FamilyId = string;
+export type DeviceIdentity = { deviceId: DeviceId; displayName: string; createdAtMs: number };
+export type FamilyMembership = { familyId: FamilyId; deviceId: DeviceId; joinedAtMs: number; role: 'owner' | 'member' };
+export type LocationPayload = { latitude: number; longitude: number; accuracyMeters: number; timestampMs: number; mode: 'idle' | 'moving' | 'live' };
+export type EncryptedEnvelope = { version: typeof FAMILY_PROTOCOL_VERSION; familyId: FamilyId; senderDeviceId: DeviceId; messageId: string; sentAtMs: number; kind: 'location'; nonce: string; ciphertext: string };
+export type RelayDeviceState = { deviceId: DeviceId; envelope: EncryptedEnvelope; receivedAtMs: number };
+export type CreateFamilyRequest = { ownerDeviceId: DeviceId; ownerPublicKey: string };
+export type CreateFamilyResponse = { familyId: FamilyId; inviteCode: string };
+export type JoinFamilyRequest = { inviteCode: string; deviceId: DeviceId; devicePublicKey: string };
+export type JoinFamilyResponse = { familyId: FamilyId; members: Array<{ deviceId: DeviceId; publicKey: string }> };
+export type PublishLocationRequest = { envelope: EncryptedEnvelope };
+export type FamilySnapshotResponse = { familyId: FamilyId; devices: RelayDeviceState[] };
