@@ -6,11 +6,13 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
+import { createLocalFamily, getOrCreateLocalFamilyState, joinLocalFamily, resetLocalFamily, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 
@@ -40,6 +42,8 @@ const EMPTY_SNAPSHOT: NativeLocationSnapshot = {
 export default function HomeScreen() {
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
   const [busy, setBusy] = useState(false);
+  const [family, setFamily] = useState<LocalFamilyState>(() => getOrCreateLocalFamilyState());
+  const [inviteInput, setInviteInput] = useState('');
 
   const refresh = useCallback(() => {
     if (Platform.OS === 'android') setSnapshot(FamilyLocation.getSnapshot());
@@ -109,8 +113,52 @@ export default function HomeScreen() {
         <Text style={styles.eyebrow}>PHASE 1 · POWER MODES</Text>
         <Text style={styles.title}>Family Location</Text>
         <Text style={styles.subtitle}>
-          Switch native location strategies without stopping the foreground service.
+          Background location plus a local Phase 2.1 family pairing prototype.
         </Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Family pairing · 2.1</Text>
+          <Text style={styles.meta}>Device: {family.device.displayName}</Text>
+          <Text style={styles.hint}>{family.device.deviceId}</Text>
+          {family.familyId ? (
+            <>
+              <Text style={styles.meta}>Role: {family.role?.toUpperCase()} · Family: {family.familyId}</Text>
+              {family.inviteCode ? <Text style={styles.inviteCode}>{family.inviteCode}</Text> : null}
+              <Text style={styles.hint}>
+                {family.role === 'owner' ? 'Share this code with the second phone. Relay validation comes in 2.2.' : 'Join recorded locally as pending. The relay will validate it in 2.2.'}
+              </Text>
+              <Pressable style={styles.secondaryButton} onPress={() => setFamily(resetLocalFamily())}>
+                <Text style={styles.secondaryButtonText}>Reset family</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable style={styles.button} onPress={() => setFamily(createLocalFamily())}>
+                <Text style={styles.buttonText}>Create family</Text>
+              </Pressable>
+              <Text style={styles.or}>OR</Text>
+              <TextInput
+                value={inviteInput}
+                onChangeText={(value) => setInviteInput(value.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={6}
+                placeholder="6-character invite code"
+                style={styles.input}
+              />
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => {
+                  try {
+                    setFamily(joinLocalFamily(inviteInput));
+                  } catch (error) {
+                    Alert.alert('Cannot join family', error instanceof Error ? error.message : 'Invalid invite code');
+                  }
+                }}>
+                <Text style={styles.secondaryButtonText}>Join family</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
 
         <View style={styles.card}>
           {snapshot.stopReason === 'RECENT_SWIPE' ? (
@@ -243,4 +291,9 @@ const styles = StyleSheet.create({
   stopButton: { backgroundColor: '#4b1f1f' },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   note: { fontSize: 13, lineHeight: 19, opacity: 0.5 },
+  inviteCode: { fontSize: 30, fontWeight: '800', letterSpacing: 6, textAlign: 'center', paddingVertical: 8 },
+  input: { minHeight: 46, borderWidth: 1, borderColor: '#d8d8d2', borderRadius: 12, paddingHorizontal: 14, fontSize: 16, letterSpacing: 2 },
+  secondaryButton: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eeeeea' },
+  secondaryButtonText: { fontSize: 14, fontWeight: '700' },
+  or: { textAlign: 'center', fontSize: 11, fontWeight: '700', opacity: 0.35 },
 });
