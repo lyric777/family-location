@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "doctor": "npx expo-doctor",
+    "relay:dev": "node scripts/dev-relay.mjs",
     "ios": "expo run:ios",
     "android:preview": "expo export --platform android && cd android && gradlew.bat app:assembleRelease"
   },
