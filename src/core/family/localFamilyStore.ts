@@ -10,55 +10,29 @@ export type LocalFamilyState = {
 
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let state: LocalFamilyState | null = null;
-
-function randomChars(length: number) {
-  let result = '';
-  for (let i = 0; i < length; i += 1) {
-    result += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return result;
-}
-
-function makeId(prefix: string) {
-  return prefix + '_' + Date.now().toString(36) + '_' + randomChars(10).toLowerCase();
-}
+const randomChars = (length: number) => Array.from({ length }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+const makeId = (prefix: string) => prefix + '_' + Date.now().toString(36) + '_' + randomChars(10).toLowerCase();
 
 export function getOrCreateLocalFamilyState(): LocalFamilyState {
-  if (!state) {
-    state = {
-      device: { deviceId: makeId('dev'), displayName: 'This phone', createdAtMs: Date.now() },
-      familyId: null,
-      inviteCode: null,
-      role: null,
-      memberDeviceIds: [],
-    };
-  }
+  if (!state) state = { device: { deviceId: makeId('dev'), displayName: 'This phone', createdAtMs: Date.now() }, familyId: null, inviteCode: null, role: null, memberDeviceIds: [] };
   return state;
 }
 
-export function createLocalFamily(): LocalFamilyState {
+export function applyCreatedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[]) {
   const current = getOrCreateLocalFamilyState();
-  state = {
-    ...current,
-    familyId: makeId('fam'),
-    inviteCode: randomChars(6),
-    role: 'owner',
-    memberDeviceIds: [current.device.deviceId],
-  };
+  state = { ...current, familyId, inviteCode, role: 'owner', memberDeviceIds };
   return state;
 }
 
-export function joinLocalFamily(inviteCode: string): LocalFamilyState {
+export function applyJoinedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[]) {
   const current = getOrCreateLocalFamilyState();
-  const normalized = inviteCode.trim().toUpperCase();
-  if (normalized.length !== 6) throw new Error('Invite code must be 6 characters');
-  state = {
-    ...current,
-    familyId: 'pending_' + normalized.toLowerCase(),
-    inviteCode: normalized,
-    role: 'member',
-    memberDeviceIds: [current.device.deviceId],
-  };
+  state = { ...current, familyId, inviteCode: inviteCode.toUpperCase(), role: 'member', memberDeviceIds };
+  return state;
+}
+
+export function updateMembers(memberDeviceIds: string[]) {
+  const current = getOrCreateLocalFamilyState();
+  state = { ...current, memberDeviceIds };
   return state;
 }
 
