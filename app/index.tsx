@@ -12,7 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
-import { createLocalFamily, getOrCreateLocalFamilyState, joinLocalFamily, resetLocalFamily, type LocalFamilyState } from '../src/core/family/localFamilyStore';
+import { applyCreatedFamily, applyJoinedFamily, getOrCreateLocalFamilyState, resetLocalFamily, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
+import { getConfiguredRelay } from '../src/core/transport/HttpFamilyRelay';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 
@@ -44,6 +45,8 @@ export default function HomeScreen() {
   const [busy, setBusy] = useState(false);
   const [family, setFamily] = useState<LocalFamilyState>(() => getOrCreateLocalFamilyState());
   const [inviteInput, setInviteInput] = useState('');
+  const [pairingBusy, setPairingBusy] = useState(false);
+  const relay = getConfiguredRelay();
 
   const refresh = useCallback(() => {
     if (Platform.OS === 'android') setSnapshot(FamilyLocation.getSnapshot());
@@ -113,11 +116,12 @@ export default function HomeScreen() {
         <Text style={styles.eyebrow}>PHASE 1 · POWER MODES</Text>
         <Text style={styles.title}>Family Location</Text>
         <Text style={styles.subtitle}>
-          Background location plus a local Phase 2.1 family pairing prototype.
+          Background location plus LAN relay family pairing.
         </Text>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Family pairing · 2.1</Text>
+          <Text style={styles.cardTitle}>Family pairing · 2.2</Text>
+          <Text style={styles.hint}>Relay: {relay ? 'CONFIGURED' : 'NOT CONFIGURED'}</Text>
           <Text style={styles.meta}>Device: {family.device.displayName}</Text>
           <Text style={styles.hint}>{family.device.deviceId}</Text>
           {family.familyId ? (
@@ -127,14 +131,43 @@ export default function HomeScreen() {
               <Text style={styles.hint}>
                 {family.role === 'owner' ? 'Share this code with the second phone. Relay validation comes in 2.2.' : 'Join recorded locally as pending. The relay will validate it in 2.2.'}
               </Text>
+              <Text style={styles.meta}>Members: {family.memberDeviceIds.length}</Text>
+              {family.memberDeviceIds.map((id) => <Text key={id} style={styles.hint}>• {id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>)}
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={async () => {
+                  if (!relay || !family.familyId) return;
+                  try {
+                    const result = await relay.getMembers(family.familyId);
+                    setFamily(updateMembers(result.members.map((member) => member.deviceId)));
+                  } catch (error) {
+                    Alert.alert('Cannot refresh family', error instanceof Error ? error.message : 'Relay error');
+                  }
+                }}>
+                <Text style={styles.secondaryButtonText}>Refresh members</Text>
+              </Pressable>
               <Pressable style={styles.secondaryButton} onPress={() => setFamily(resetLocalFamily())}>
                 <Text style={styles.secondaryButtonText}>Reset family</Text>
               </Pressable>
             </>
           ) : (
             <>
-              <Pressable style={styles.button} onPress={() => setFamily(createLocalFamily())}>
-                <Text style={styles.buttonText}>Create family</Text>
+              <Pressable
+                disabled={pairingBusy || !relay}
+                style={styles.button}
+                onPress={async () => {
+                  if (!relay) return;
+                  setPairingBusy(true);
+                  try {
+                    const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: 'phase-2.2-placeholder' });
+                    setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId)));
+                  } catch (error) {
+                    Alert.alert('Cannot create family', error instanceof Error ? error.message : 'Relay error');
+                  } finally {
+                    setPairingBusy(false);
+                  }
+                }}>
+                <Text style={styles.buttonText}>{pairingBusy ? 'Working…' : 'Create family'}</Text>
               </Pressable>
               <Text style={styles.or}>OR</Text>
               <TextInput
@@ -147,11 +180,21 @@ export default function HomeScreen() {
               />
               <Pressable
                 style={styles.secondaryButton}
-                onPress={() => {
+                disabled={pairingBusy || !relay}
+                onPress={async () => {
+                  if (!relay) return;
+                  if (inviteInput.trim().length !== 6) {
+                    Alert.alert('Cannot join family', 'Invite code must be 6 characters');
+                    return;
+                  }
+                  setPairingBusy(true);
                   try {
-                    setFamily(joinLocalFamily(inviteInput));
+                    const result = await relay.joinFamily({ inviteCode: inviteInput.trim().toUpperCase(), deviceId: family.device.deviceId, devicePublicKey: 'phase-2.2-placeholder' });
+                    setFamily(applyJoinedFamily(result.familyId, inviteInput, result.members.map((member) => member.deviceId)));
                   } catch (error) {
-                    Alert.alert('Cannot join family', error instanceof Error ? error.message : 'Invalid invite code');
+                    Alert.alert('Cannot join family', error instanceof Error ? error.message : 'Relay error');
+                  } finally {
+                    setPairingBusy(false);
                   }
                 }}>
                 <Text style={styles.secondaryButtonText}>Join family</Text>
