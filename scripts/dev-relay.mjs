@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 
 const port = Number(process.env.PORT || 8787);
 const families = new Map();
@@ -13,7 +13,8 @@ const readBody = async (req) => {
   for await (const chunk of req) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 };
-const inviteCode = () => randomBytes(4).toString('base64url').replace(/[-_]/g, '').slice(0, 6).toUpperCase();
+const inviteAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const inviteCode = () => Array.from({ length: 6 }, () => inviteAlphabet[randomInt(inviteAlphabet.length)]).join('');
 
 const server = http.createServer(async (req, res) => {
   try {
