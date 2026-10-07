@@ -158,7 +158,7 @@ export default function HomeScreen() {
             <>
               <Pressable
                 disabled={pairingBusy || !relay}
-                style={styles.button}
+                style={[styles.button, styles.createFamilyButton]}
                 onPress={async () => {
                   if (!relay) return;
                   setPairingBusy(true);
@@ -336,6 +336,7 @@ const styles = StyleSheet.create({
   warningText: { fontSize: 12, lineHeight: 18, opacity: 0.7 },
   button: { marginTop: 10, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   startButton: { backgroundColor: '#171717' },
+  createFamilyButton: { backgroundColor: '#171717' },
   stopButton: { backgroundColor: '#4b1f1f' },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   note: { fontSize: 13, lineHeight: 19, opacity: 0.5 },
