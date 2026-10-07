@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import type { CreateFamilyRequest, CreateFamilyResponse, JoinFamilyRequest, JoinFamilyResponse } from '../family/protocol';
 
 export type RelayMember = { deviceId: string; publicKey: string };
@@ -30,6 +31,7 @@ export class HttpFamilyRelay {
 }
 
 export function getConfiguredRelay() {
-  const url = process.env.EXPO_PUBLIC_RELAY_URL?.replace(/\/$/, '');
+  const configured = Constants.expoConfig?.extra?.relayUrl;
+  const url = typeof configured === 'string' ? configured.replace(/\/$/, '') : '';
   return url ? new HttpFamilyRelay(url) : null;
 }
