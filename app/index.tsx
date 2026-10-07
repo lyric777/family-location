@@ -4,6 +4,7 @@ import {
   PermissionsAndroid,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -112,7 +113,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'right', 'bottom', 'left']}>
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic">
         <Text style={styles.eyebrow}>PHASE 1 · POWER MODES</Text>
         <Text style={styles.title}>Family Location</Text>
         <Text style={styles.subtitle}>
@@ -292,7 +296,7 @@ export default function HomeScreen() {
         <Text style={styles.note}>
           These modes are manually selectable for validation. Automatic movement detection comes next.
         </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -304,7 +308,8 @@ function formatTime(value: number | null) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f5f5f2' },
-  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 16 },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 24, paddingBottom: 32, gap: 16 },
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.5, opacity: 0.5 },
   title: { fontSize: 38, fontWeight: '700', letterSpacing: -1 },
   subtitle: { fontSize: 17, lineHeight: 25, opacity: 0.65 },
