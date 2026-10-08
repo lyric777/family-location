@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
-import { applyCreatedFamily, applyJoinedFamily, getOrCreateLocalFamilyState, resetLocalFamily, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
+import { applyCreatedFamily, applyJoinedFamily, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay } from '../src/core/transport/HttpFamilyRelay';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
@@ -47,6 +47,7 @@ export default function HomeScreen() {
   const [family, setFamily] = useState<LocalFamilyState>(() => getOrCreateLocalFamilyState());
   const [inviteInput, setInviteInput] = useState('');
   const [pairingBusy, setPairingBusy] = useState(false);
+  const [identityReady, setIdentityReady] = useState(false);
   const relay = getConfiguredRelay();
 
   const refresh = useCallback(() => {
@@ -65,6 +66,9 @@ export default function HomeScreen() {
       }
       refresh();
     };
+    initializeFamilyState().then((loaded) => {
+      if (mounted) { setFamily(loaded); setIdentityReady(true); }
+    }).catch((error) => Alert.alert('Device identity error', String(error)));
     initialize();
     const timer = setInterval(refresh, 2_000);
     return () => {
@@ -124,7 +128,7 @@ export default function HomeScreen() {
         </Text>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Family pairing · 2.2</Text>
+          <Text style={styles.cardTitle}>Family pairing · 2.3</Text>
           <Text style={styles.hint}>Relay: {relay ? 'CONFIGURED' : 'NOT CONFIGURED'}</Text>
           <Text style={styles.meta}>Device: {family.device.displayName}</Text>
           <Text style={styles.hint}>{family.device.deviceId}</Text>
@@ -133,7 +137,7 @@ export default function HomeScreen() {
               <Text style={styles.meta}>Role: {family.role?.toUpperCase()} · Family: {family.familyId}</Text>
               {family.inviteCode ? <Text style={styles.inviteCode}>{family.inviteCode}</Text> : null}
               <Text style={styles.hint}>
-                {family.role === 'owner' ? 'Share this code with the second phone. Relay validation comes in 2.2.' : 'Join recorded locally as pending. The relay will validate it in 2.2.'}
+                {family.role === 'owner' ? 'Share this code with the second device.' : 'Joined through the LAN relay.'}
               </Text>
               <Text style={styles.meta}>Members: {family.memberDeviceIds.length}</Text>
               {family.memberDeviceIds.map((id) => <Text key={id} style={styles.hint}>• {id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>)}
@@ -144,27 +148,29 @@ export default function HomeScreen() {
                   try {
                     const result = await relay.getMembers(family.familyId);
                     setFamily(updateMembers(result.members.map((member) => member.deviceId)));
+                    await persistFamilyState();
                   } catch (error) {
                     Alert.alert('Cannot refresh family', error instanceof Error ? error.message : 'Relay error');
                   }
                 }}>
                 <Text style={styles.secondaryButtonText}>Refresh members</Text>
               </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={() => setFamily(resetLocalFamily())}>
+              <Pressable style={styles.secondaryButton} onPress={async () => setFamily(await clearPersistedFamily())}>
                 <Text style={styles.secondaryButtonText}>Reset family</Text>
               </Pressable>
             </>
           ) : (
             <>
               <Pressable
-                disabled={pairingBusy || !relay}
+                disabled={pairingBusy || !relay || !identityReady}
                 style={[styles.button, styles.createFamilyButton]}
                 onPress={async () => {
                   if (!relay) return;
                   setPairingBusy(true);
                   try {
-                    const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: 'phase-2.2-placeholder' });
+                    const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
                     setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId)));
+                    await persistFamilyState();
                   } catch (error) {
                     Alert.alert('Cannot create family', error instanceof Error ? error.message : 'Relay error');
                   } finally {
@@ -193,8 +199,9 @@ export default function HomeScreen() {
                   }
                   setPairingBusy(true);
                   try {
-                    const result = await relay.joinFamily({ inviteCode: inviteInput.trim().toUpperCase(), deviceId: family.device.deviceId, devicePublicKey: 'phase-2.2-placeholder' });
+                    const result = await relay.joinFamily({ inviteCode: inviteInput.trim().toUpperCase(), deviceId: family.device.deviceId, devicePublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
                     setFamily(applyJoinedFamily(result.familyId, inviteInput, result.members.map((member) => member.deviceId)));
+                    await persistFamilyState();
                   } catch (error) {
                     Alert.alert('Cannot join family', error instanceof Error ? error.message : 'Relay error');
                   } finally {
