@@ -9,6 +9,18 @@ class FamilyLocationModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("FamilyLocation")
 
+    AsyncFunction("getDeviceIdentity") { FamilyIdentity.identity() }
+    AsyncFunction("signIdentityChallenge") { message: String -> FamilyIdentity.sign(message) }
+    AsyncFunction("getFamilyMembership") {
+      FamilyIdentity.getMembership(requireNotNull(appContext.reactContext))
+    }
+    AsyncFunction("saveFamilyMembership") { json: String ->
+      FamilyIdentity.saveMembership(requireNotNull(appContext.reactContext), json)
+    }
+    AsyncFunction("clearFamilyMembership") {
+      FamilyIdentity.clearMembership(requireNotNull(appContext.reactContext))
+    }
+
     AsyncFunction("start") {
       val context = requireNotNull(appContext.reactContext)
       FamilyLocationStore.clearStopReason(context)
