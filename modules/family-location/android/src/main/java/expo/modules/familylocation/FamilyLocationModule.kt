@@ -21,6 +21,22 @@ class FamilyLocationModule : Module() {
       FamilyIdentity.clearMembership(requireNotNull(appContext.reactContext))
     }
 
+    AsyncFunction("hasFamilyKey") { familyId: String ->
+      FamilyCrypto.hasKey(requireNotNull(appContext.reactContext), familyId)
+    }
+    AsyncFunction("createFamilyKey") { familyId: String ->
+      FamilyCrypto.createKey(requireNotNull(appContext.reactContext), familyId)
+    }
+    AsyncFunction("encryptFamilyPayload") { familyId: String, plaintext: String, aad: String ->
+      FamilyCrypto.encrypt(requireNotNull(appContext.reactContext), familyId, plaintext, aad)
+    }
+    AsyncFunction("decryptFamilyPayload") { familyId: String, nonce: String, ciphertext: String, aad: String ->
+      FamilyCrypto.decrypt(requireNotNull(appContext.reactContext), familyId, nonce, ciphertext, aad)
+    }
+    AsyncFunction("deleteFamilyKey") { familyId: String ->
+      FamilyCrypto.deleteKey(requireNotNull(appContext.reactContext), familyId)
+    }
+
     AsyncFunction("start") {
       val context = requireNotNull(appContext.reactContext)
       FamilyLocationStore.clearStopReason(context)
