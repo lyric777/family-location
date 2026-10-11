@@ -13,7 +13,8 @@ const deviceIdFor = (key) => 'dev_' + createHash('sha256').update(Buffer.from(ke
 const validKey = (key) => { try { const parsed = createPublicKey({ key: Buffer.from(key, 'base64'), format: 'der', type: 'spki' }); return parsed.asymmetricKeyType === 'ec' && parsed.asymmetricKeyDetails?.namedCurve === 'prime256v1'; } catch { return false; } };
 const member = (family, deviceId) => family?.members.get(deviceId);
 const publicMembers = (family) => [...family.members].map(([deviceId, data]) => ({ deviceId, publicKey: data.publicKey }));
-const authenticate = (req, family, action) => {
+const requestDigest = (body) => createHash('sha256').update(body).digest('hex');
+const authenticate = (req, family, action, bodyText) => {
   const deviceId = req.headers['x-device-id'];
   const nonce = req.headers['x-auth-nonce'];
   const signature = req.headers['x-auth-signature'];
@@ -22,7 +23,7 @@ const authenticate = (req, family, action) => {
   if (!entry || !challenge || challenge.deviceId !== deviceId || challenge.familyId !== family.familyId || challenge.action !== action || challenge.expiresAt < Date.now()) return false;
   challenges.delete(nonce);
   try {
-    return verify('sha256', Buffer.from(action + ':' + family.familyId + ':' + nonce), createPublicKey({ key: Buffer.from(entry.publicKey, 'base64'), format: 'der', type: 'spki' }), Buffer.from(signature, 'base64'));
+    return verify('sha256', Buffer.from(JSON.stringify([action, family.familyId, nonce, req.method, req.url, requestDigest(bodyText)])), createPublicKey({ key: Buffer.from(entry.publicKey, 'base64'), format: 'der', type: 'spki' }), Buffer.from(signature, 'base64'));
   } catch { return false; }
 };
 
@@ -62,11 +63,19 @@ http.createServer(async (req, res) => {
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
     const action = match[2] === 'locations' ? 'publish' : match[2];
-    if (!authenticate(req, family, action)) return json(res, 403, { error: 'Authentication failed' });
+    const bodyText = req.method === 'POST' ? await (async () => {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+        if (chunks.reduce((sum, value) => sum + value.length, 0) > 32768) throw Error('Request too large');
+      }
+      return Buffer.concat(chunks).toString('utf8');
+    })() : '';
+    if (!authenticate(req, family, action, bodyText)) return json(res, 403, { error: 'Authentication failed' });
     if (req.method === 'GET' && action === 'members') return json(res, 200, { familyId: family.familyId, members: publicMembers(family) });
     if (req.method === 'GET' && action === 'snapshot') return json(res, 200, { familyId: family.familyId, devices: [...family.latest.values()] });
     if (req.method === 'POST' && action === 'publish') {
-      const b = await read(req);
+      const b = JSON.parse(bodyText);
       const e = b.envelope;
       if (!e || e.version !== 1 || e.kind !== 'location' || e.familyId !== family.familyId || e.senderDeviceId !== req.headers['x-device-id'] || typeof e.ciphertext !== 'string' || typeof e.nonce !== 'string' || !Number.isFinite(e.sentAtMs)) return json(res, 400, { error: 'Invalid envelope' });
       const previous = family.latest.get(e.senderDeviceId);
