@@ -8,6 +8,7 @@ export type NativeLocationSnapshot = {
   latitude: number | null; longitude: number | null; accuracyMeters: number | null; timestampMs: number | null;
 };
 type FamilyLocationNativeModule = {
+  sha256Hex(value: string): Promise<string>;
   getDeviceIdentity(): Promise<{ deviceId: string; publicKey: string; displayName: string }>;
   signIdentityChallenge(message: string): Promise<string>;
   getFamilyMembership(): Promise<string | null>;
