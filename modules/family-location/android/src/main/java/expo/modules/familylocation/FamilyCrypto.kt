@@ -6,6 +6,12 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONObject
 import java.security.KeyStore
+import java.security.KeyPairGenerator
+import java.security.KeyFactory
+import java.security.spec.X509EncodedKeySpec
+import javax.crypto.KeyAgreement
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -13,6 +19,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 object FamilyCrypto {
+  private const val EXCHANGE_ALIAS = "family_location_exchange_v1"
   private const val WRAP_ALIAS = "family_location_wrap_v1"
   private const val PREFS = "family_crypto_v1"
   private const val TAG_BITS = 128
@@ -31,6 +38,58 @@ object FamilyCrypto {
         .build()
     )
     return generator.generateKey()
+  }
+
+  private fun exchangePair(): java.security.KeyPair {
+    val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    val existing = store.getEntry(EXCHANGE_ALIAS, null) as? KeyStore.PrivateKeyEntry
+    if (existing != null) return java.security.KeyPair(existing.certificate.publicKey, existing.privateKey)
+    val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+    generator.initialize(
+      KeyGenParameterSpec.Builder(EXCHANGE_ALIAS, KeyProperties.PURPOSE_AGREE_KEY)
+        .setAlgorithmParameterSpec(java.security.spec.ECGenParameterSpec("secp256r1"))
+        .build()
+    )
+    return generator.generateKeyPair()
+  }
+
+  fun exchangePublicKey(): String = b64(exchangePair().public.encoded)
+
+  private fun exchangeKey(peerPublicKey: String, familyId: String): ByteArray {
+    val peer = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(from64(peerPublicKey)))
+    val agreement = KeyAgreement.getInstance("ECDH")
+    agreement.init(exchangePair().private)
+    agreement.doPhase(peer, true)
+    val secret = agreement.generateSecret()
+    try {
+      val mac = Mac.getInstance("HmacSHA256")
+      mac.init(SecretKeySpec(familyId.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+      val prk = mac.doFinal(secret)
+      mac.init(SecretKeySpec(prk, "HmacSHA256"))
+      return mac.doFinal("family-key-wrap-v1".toByteArray(Charsets.UTF_8) + byteArrayOf(1)).copyOf(32)
+    } finally { secret.fill(0) }
+  }
+
+  fun exportKeyForMember(context: Context, familyId: String, peerPublicKey: String): Map<String, String> {
+    val raw = loadKey(context, familyId)
+    val wrapping = exchangeKey(peerPublicKey, familyId)
+    try {
+      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+      cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapping, "AES"))
+      cipher.updateAAD(familyId.toByteArray(Charsets.UTF_8))
+      return mapOf("nonce" to b64(cipher.iv), "ciphertext" to b64(cipher.doFinal(raw)))
+    } finally { raw.fill(0); wrapping.fill(0) }
+  }
+
+  fun importKeyFromMember(context: Context, familyId: String, senderPublicKey: String, nonce: String, ciphertext: String) {
+    val wrapping = exchangeKey(senderPublicKey, familyId)
+    try {
+      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+      cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(wrapping, "AES"), GCMParameterSpec(TAG_BITS, from64(nonce)))
+      cipher.updateAAD(familyId.toByteArray(Charsets.UTF_8))
+      val raw = cipher.doFinal(from64(ciphertext))
+      try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
+    } finally { wrapping.fill(0) }
   }
 
   fun hasKey(context: Context, familyId: String): Boolean =
