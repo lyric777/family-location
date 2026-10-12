@@ -14,6 +14,9 @@ type FamilyLocationNativeModule = {
   getFamilyMembership(): Promise<string | null>;
   saveFamilyMembership(json: string): Promise<void>;
   clearFamilyMembership(): Promise<void>;
+  getExchangePublicKey(): Promise<string>;
+  exportFamilyKeyForMember(familyId: string, peerPublicKey: string): Promise<{ nonce: string; ciphertext: string }>;
+  importFamilyKeyFromMember(familyId: string, senderPublicKey: string, nonce: string, ciphertext: string): Promise<void>;
   hasFamilyKey(familyId: string): Promise<boolean>;
   createFamilyKey(familyId: string): Promise<void>;
   encryptFamilyPayload(familyId: string, plaintext: string, aad: string): Promise<{ nonce: string; ciphertext: string }>;
