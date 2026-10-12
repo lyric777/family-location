@@ -9,6 +9,11 @@ class FamilyLocationModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("FamilyLocation")
 
+    AsyncFunction("sha256Hex") { value: String ->
+      val digest = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(Charsets.UTF_8))
+      digest.joinToString("") { byte -> "%02x".format(byte.toInt() and 255) }
+    }
     AsyncFunction("getDeviceIdentity") { FamilyIdentity.identity() }
     AsyncFunction("signIdentityChallenge") { message: String -> FamilyIdentity.sign(message) }
     AsyncFunction("getFamilyMembership") {
