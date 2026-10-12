@@ -32,7 +32,11 @@ export class HttpFamilyRelay {
       method: 'POST',
       body: JSON.stringify({ familyId, deviceId: identity.deviceId, action }),
     });
-    const signature = await FamilyLocation.signIdentityChallenge(action + ':' + familyId + ':' + nonce);
+    const method = init?.method ?? 'GET';
+    const body = typeof init?.body === 'string' ? init.body : '';
+    const digest = await FamilyLocation.sha256Hex(body);
+    const signedMessage = JSON.stringify([action, familyId, nonce, method, path, digest]);
+    const signature = await FamilyLocation.signIdentityChallenge(signedMessage);
     return this.request<T>(path, {
       ...init,
       headers: {
