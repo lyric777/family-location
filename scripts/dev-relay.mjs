@@ -35,7 +35,7 @@ http.createServer(async (req, res) => {
       if (!validKey(b.ownerPublicKey) || deviceIdFor(b.ownerPublicKey) !== b.ownerDeviceId) return json(res, 400, { error: 'Invalid device identity' });
       const familyId = 'fam_' + randomUUID();
       let inviteCode = code(); while (invites.has(inviteCode)) inviteCode = code();
-      const family = { familyId, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map() };
+      const family = { familyId, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map(), keyPackages: new Map() };
       families.set(familyId, family);
       invites.set(inviteCode, { familyId, expiresAt: Date.now() + 10 * 60_000, uses: 0 });
       return json(res, 201, { familyId, inviteCode, members: publicMembers(family) });
@@ -53,12 +53,12 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
-      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
+      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
       return json(res, 200, { nonce });
     }
-    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot)$/);
+    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send)$/);
     if (!match) return json(res, 404, { error: 'Not found' });
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
@@ -72,6 +72,31 @@ http.createServer(async (req, res) => {
       return Buffer.concat(chunks).toString('utf8');
     })() : '';
     if (!authenticate(req, family, action, bodyText)) return json(res, 403, { error: 'Authentication failed' });
+    if (req.method === 'POST' && action === 'key-register') {
+      const b = JSON.parse(bodyText);
+      if (!validKey(b.exchangePublicKey) || typeof b.bindingSignature !== 'string') return json(res, 400, { error: 'Invalid exchange key' });
+      const sender = req.headers['x-device-id'];
+      const entry = family.members.get(sender);
+      const message = JSON.stringify(['exchange-key-v1', family.familyId, sender, b.exchangePublicKey]);
+      const verified = verify('sha256', Buffer.from(message), createPublicKey({ key: Buffer.from(entry.publicKey, 'base64'), format: 'der', type: 'spki' }), Buffer.from(b.bindingSignature, 'base64'));
+      if (!verified) return json(res, 403, { error: 'Exchange key binding failed' });
+      entry.exchangePublicKey = b.exchangePublicKey;
+      entry.bindingSignature = b.bindingSignature;
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && action === 'key-read') return json(res, 200, {
+      members: [...family.members].filter(([, m]) => m.exchangePublicKey).map(([deviceId, m]) => ({
+        deviceId, identityPublicKey: m.publicKey, exchangePublicKey: m.exchangePublicKey, bindingSignature: m.bindingSignature,
+      })),
+      packages: [...family.keyPackages.values()].filter(p => p.recipientDeviceId === req.headers['x-device-id']),
+    });
+    if (req.method === 'POST' && action === 'key-send') {
+      const b = JSON.parse(bodyText);
+      if (!family.members.has(b.recipientDeviceId) || typeof b.nonce !== 'string' || typeof b.ciphertext !== 'string') return json(res, 400, { error: 'Invalid key package' });
+      const senderDeviceId = req.headers['x-device-id'];
+      family.keyPackages.set(b.recipientDeviceId, { ...b, senderDeviceId });
+      return json(res, 200, { ok: true });
+    }
     if (req.method === 'GET' && action === 'members') return json(res, 200, { familyId: family.familyId, members: publicMembers(family) });
     if (req.method === 'GET' && action === 'snapshot') return json(res, 200, { familyId: family.familyId, devices: [...family.latest.values()] });
     if (req.method === 'POST' && action === 'publish') {
