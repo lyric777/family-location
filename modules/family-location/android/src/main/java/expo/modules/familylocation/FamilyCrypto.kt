@@ -16,7 +16,6 @@ import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 object FamilyCrypto {
   private const val EXCHANGE_ALIAS = "family_location_exchange_v1"
