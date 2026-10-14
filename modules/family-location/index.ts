@@ -9,6 +9,7 @@ export type NativeLocationSnapshot = {
 };
 type FamilyLocationNativeModule = {
   sha256Hex(value: string): Promise<string>;
+  verifyIdentitySignature(publicKey: string, message: string, signature: string): Promise<boolean>;
   getDeviceIdentity(): Promise<{ deviceId: string; publicKey: string; displayName: string }>;
   signIdentityChallenge(message: string): Promise<string>;
   getFamilyMembership(): Promise<string | null>;
