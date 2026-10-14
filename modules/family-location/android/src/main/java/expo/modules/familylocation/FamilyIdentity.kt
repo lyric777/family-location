@@ -9,6 +9,8 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.Signature
+import java.security.KeyFactory
+import java.security.spec.X509EncodedKeySpec
 
 object FamilyIdentity {
   private const val ALIAS = "family_location_identity_v1"
@@ -45,6 +47,18 @@ object FamilyIdentity {
     signature.initSign(keyPair().private)
     signature.update(message.toByteArray(Charsets.UTF_8))
     return Base64.encodeToString(signature.sign(), Base64.NO_WRAP)
+  }
+
+  fun verifySignature(publicKey: String, message: String, signatureBase64: String): Boolean {
+    return try {
+      val key = KeyFactory.getInstance("EC").generatePublic(
+        X509EncodedKeySpec(Base64.decode(publicKey, Base64.DEFAULT))
+      )
+      val verifier = Signature.getInstance("SHA256withECDSA")
+      verifier.initVerify(key)
+      verifier.update(message.toByteArray(Charsets.UTF_8))
+      verifier.verify(Base64.decode(signatureBase64, Base64.DEFAULT))
+    } catch (_: Exception) { false }
   }
 
   fun getMembership(context: Context): String? =
