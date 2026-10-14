@@ -14,6 +14,9 @@ class FamilyLocationModule : Module() {
         .digest(value.toByteArray(Charsets.UTF_8))
       digest.joinToString("") { byte -> "%02x".format(byte.toInt() and 255) }
     }
+    AsyncFunction("verifyIdentitySignature") { publicKey: String, message: String, signature: String ->
+      FamilyIdentity.verifySignature(publicKey, message, signature)
+    }
     AsyncFunction("getDeviceIdentity") { FamilyIdentity.identity() }
     AsyncFunction("signIdentityChallenge") { message: String -> FamilyIdentity.sign(message) }
     AsyncFunction("getFamilyMembership") {
