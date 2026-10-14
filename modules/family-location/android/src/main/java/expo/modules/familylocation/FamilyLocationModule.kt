@@ -9,6 +9,11 @@ class FamilyLocationModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("FamilyLocation")
 
+    AsyncFunction("sha256HexBase64") { value: String ->
+      val digest = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(android.util.Base64.decode(value, android.util.Base64.DEFAULT))
+      digest.joinToString("") { byte -> "%02x".format(byte.toInt() and 255) }
+    }
     AsyncFunction("sha256Hex") { value: String ->
       val digest = java.security.MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))
