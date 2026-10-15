@@ -35,7 +35,7 @@ http.createServer(async (req, res) => {
       if (!validKey(b.ownerPublicKey) || deviceIdFor(b.ownerPublicKey) !== b.ownerDeviceId) return json(res, 400, { error: 'Invalid device identity' });
       const familyId = 'fam_' + randomUUID();
       let inviteCode = code(); while (invites.has(inviteCode)) inviteCode = code();
-      const family = { familyId, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map(), keyPackages: new Map() };
+      const family = { familyId, ownerDeviceId: b.ownerDeviceId, keyEpoch: 1, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map(), keyPackages: new Map() };
       families.set(familyId, family);
       invites.set(inviteCode, { familyId, expiresAt: Date.now() + 10 * 60_000, uses: 0 });
       return json(res, 201, { familyId, inviteCode, members: publicMembers(family) });
@@ -92,9 +92,10 @@ http.createServer(async (req, res) => {
     });
     if (req.method === 'POST' && action === 'key-send') {
       const b = JSON.parse(bodyText);
-      if (!family.members.has(b.recipientDeviceId) || typeof b.nonce !== 'string' || typeof b.ciphertext !== 'string') return json(res, 400, { error: 'Invalid key package' });
+      if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Only owner may distribute keys' });
+      if (!family.members.has(b.recipientDeviceId) || b.recipientDeviceId === family.ownerDeviceId || typeof b.nonce !== 'string' || typeof b.ciphertext !== 'string') return json(res, 400, { error: 'Invalid key package' });
       const senderDeviceId = req.headers['x-device-id'];
-      family.keyPackages.set(b.recipientDeviceId, { ...b, senderDeviceId });
+      family.keyPackages.set(b.recipientDeviceId, { recipientDeviceId: b.recipientDeviceId, nonce: b.nonce, ciphertext: b.ciphertext, senderDeviceId, epoch: family.keyEpoch });
       return json(res, 200, { ok: true });
     }
     if (req.method === 'GET' && action === 'members') return json(res, 200, { familyId: family.familyId, members: publicMembers(family) });
