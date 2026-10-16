@@ -69,23 +69,27 @@ object FamilyCrypto {
     } finally { secret.fill(0) }
   }
 
-  fun exportKeyForMember(context: Context, familyId: String, peerPublicKey: String): Map<String, String> {
+  private fun keyPackageContext(familyId: String, senderId: String, recipientId: String, epoch: Int): ByteArray =
+    org.json.JSONArray().put("family-key-v1").put(familyId).put(senderId).put(recipientId).put(epoch)
+      .toString().toByteArray(Charsets.UTF_8)
+
+  fun exportKeyForMember(context: Context, familyId: String, peerPublicKey: String, senderId: String, recipientId: String, epoch: Int): Map<String, String> {
     val raw = loadKey(context, familyId)
     val wrapping = exchangeKey(peerPublicKey, familyId)
     try {
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapping, "AES"))
-      cipher.updateAAD(familyId.toByteArray(Charsets.UTF_8))
+      cipher.updateAAD(keyPackageContext(familyId, senderId, recipientId, epoch))
       return mapOf("nonce" to b64(cipher.iv), "ciphertext" to b64(cipher.doFinal(raw)))
     } finally { raw.fill(0); wrapping.fill(0) }
   }
 
-  fun importKeyFromMember(context: Context, familyId: String, senderPublicKey: String, nonce: String, ciphertext: String) {
+  fun importKeyFromMember(context: Context, familyId: String, senderPublicKey: String, nonce: String, ciphertext: String, senderId: String, recipientId: String, epoch: Int) {
     val wrapping = exchangeKey(senderPublicKey, familyId)
     try {
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(wrapping, "AES"), GCMParameterSpec(TAG_BITS, from64(nonce)))
-      cipher.updateAAD(familyId.toByteArray(Charsets.UTF_8))
+      cipher.updateAAD(keyPackageContext(familyId, senderId, recipientId, epoch))
       val raw = cipher.doFinal(from64(ciphertext))
       try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
     } finally { wrapping.fill(0) }
