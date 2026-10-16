@@ -46,7 +46,7 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
     await FamilyLocation.createFamilyKey(familyId);
     for (const member of members.values()) {
       if (member.deviceId === identity.deviceId) continue;
-      const wrapped = await FamilyLocation.exportFamilyKeyForMember(familyId, member.exchangePublicKey);
+      const wrapped = await FamilyLocation.exportFamilyKeyForMember(familyId, member.exchangePublicKey, identity.deviceId, member.deviceId, 1);
       await relay.sendKeyPackage(familyId, member.deviceId, wrapped.nonce, wrapped.ciphertext);
     }
     return true;
@@ -57,6 +57,7 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
     if (!sender || packet.recipientDeviceId !== identity.deviceId) continue;
     await FamilyLocation.importFamilyKeyFromMember(
       familyId, sender.exchangePublicKey, packet.nonce, packet.ciphertext,
+      packet.senderDeviceId, packet.recipientDeviceId, 1,
     );
     return true;
   }
