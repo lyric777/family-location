@@ -35,11 +35,11 @@ class FamilyLocationModule : Module() {
     }
 
     AsyncFunction("getExchangePublicKey") { FamilyCrypto.exchangePublicKey() }
-    AsyncFunction("exportFamilyKeyForMember") { familyId: String, peerPublicKey: String ->
-      FamilyCrypto.exportKeyForMember(requireNotNull(appContext.reactContext), familyId, peerPublicKey)
+    AsyncFunction("exportFamilyKeyForMember") { familyId: String, peerPublicKey: String, senderId: String, recipientId: String, epoch: Int ->
+      FamilyCrypto.exportKeyForMember(requireNotNull(appContext.reactContext), familyId, peerPublicKey, senderId, recipientId, epoch)
     }
-    AsyncFunction("importFamilyKeyFromMember") { familyId: String, senderPublicKey: String, nonce: String, ciphertext: String ->
-      FamilyCrypto.importKeyFromMember(requireNotNull(appContext.reactContext), familyId, senderPublicKey, nonce, ciphertext)
+    AsyncFunction("importFamilyKeyFromMember") { familyId: String, senderPublicKey: String, nonce: String, ciphertext: String, senderId: String, recipientId: String, epoch: Int ->
+      FamilyCrypto.importKeyFromMember(requireNotNull(appContext.reactContext), familyId, senderPublicKey, nonce, ciphertext, senderId, recipientId, epoch)
     }
 
     AsyncFunction("hasFamilyKey") { familyId: String ->
