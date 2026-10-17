@@ -53,12 +53,12 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
-      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
+      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
       return json(res, 200, { nonce });
     }
-    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send)$/);
+    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke)$/);
     if (!match) return json(res, 404, { error: 'Not found' });
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
@@ -85,6 +85,9 @@ http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     if (req.method === 'GET' && action === 'key-read') return json(res, 200, {
+      keyEpoch: family.keyEpoch,
+      ownerDeviceId: family.ownerDeviceId,
+      rotationRequired: !!family.rotationRequired,
       members: [...family.members].filter(([, m]) => m.exchangePublicKey).map(([deviceId, m]) => ({
         deviceId, identityPublicKey: m.publicKey, exchangePublicKey: m.exchangePublicKey, bindingSignature: m.bindingSignature,
       })),
@@ -98,9 +101,21 @@ http.createServer(async (req, res) => {
       family.keyPackages.set(b.recipientDeviceId, { recipientDeviceId: b.recipientDeviceId, nonce: b.nonce, ciphertext: b.ciphertext, senderDeviceId, epoch: family.keyEpoch });
       return json(res, 200, { ok: true });
     }
+    if (req.method === 'POST' && action === 'revoke') {
+      if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Owner required' });
+      const b = JSON.parse(bodyText);
+      if (!family.members.has(b.deviceId) || b.deviceId === family.ownerDeviceId) return json(res, 400, { error: 'Invalid member' });
+      family.members.delete(b.deviceId);
+      family.keyPackages.clear();
+      family.latest.clear();
+      family.keyEpoch++;
+      family.rotationRequired = true;
+      return json(res, 200, { keyEpoch: family.keyEpoch, rotationRequired: true });
+    }
     if (req.method === 'GET' && action === 'members') return json(res, 200, { familyId: family.familyId, members: publicMembers(family) });
     if (req.method === 'GET' && action === 'snapshot') return json(res, 200, { familyId: family.familyId, devices: [...family.latest.values()] });
     if (req.method === 'POST' && action === 'publish') {
+      if (family.rotationRequired) return json(res, 409, { error: 'Key rotation required' });
       const b = JSON.parse(bodyText);
       const e = b.envelope;
       if (!e || e.version !== 1 || e.kind !== 'location' || e.familyId !== family.familyId || e.senderDeviceId !== req.headers['x-device-id'] || typeof e.ciphertext !== 'string' || typeof e.nonce !== 'string' || !Number.isFinite(e.sentAtMs)) return json(res, 400, { error: 'Invalid envelope' });
