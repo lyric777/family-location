@@ -105,6 +105,12 @@ object FamilyCrypto {
     try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
   }
 
+  fun rotateKey(context: Context, familyId: String) {
+    require(hasKey(context, familyId)) { "Cannot rotate missing family key" }
+    val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
+    try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
+  }
+
   private fun storeKey(context: Context, familyId: String, raw: ByteArray) {
     require(raw.size == 32)
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
