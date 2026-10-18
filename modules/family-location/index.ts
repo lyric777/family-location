@@ -23,6 +23,7 @@ type FamilyLocationNativeModule = {
   createFamilyKey(familyId: string): Promise<void>;
   encryptFamilyPayload(familyId: string, plaintext: string, aad: string): Promise<{ nonce: string; ciphertext: string }>;
   decryptFamilyPayload(familyId: string, nonce: string, ciphertext: string, aad: string): Promise<string>;
+  rotateFamilyKey(familyId: string): Promise<void>;
   deleteFamilyKey(familyId: string): Promise<void>;
   start(): Promise<void>; consumeResumeSharingIntent(): Promise<boolean>; stop(): Promise<void>; setMode(mode: LocationMode): Promise<void>; setAutoMode(enabled: boolean): Promise<void>;
   getSnapshot(): NativeLocationSnapshot;
