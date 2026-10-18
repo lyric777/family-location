@@ -54,6 +54,9 @@ class FamilyLocationModule : Module() {
     AsyncFunction("decryptFamilyPayload") { familyId: String, nonce: String, ciphertext: String, aad: String ->
       FamilyCrypto.decrypt(requireNotNull(appContext.reactContext), familyId, nonce, ciphertext, aad)
     }
+    AsyncFunction("rotateFamilyKey") { familyId: String ->
+      FamilyCrypto.rotateKey(requireNotNull(appContext.reactContext), familyId)
+    }
     AsyncFunction("deleteFamilyKey") { familyId: String ->
       FamilyCrypto.deleteKey(requireNotNull(appContext.reactContext), familyId)
     }
