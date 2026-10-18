@@ -53,12 +53,12 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
-      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
+      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'rotation-complete'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
       return json(res, 200, { nonce });
     }
-    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke)$/);
+    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|rotation-complete)$/);
     if (!match) return json(res, 404, { error: 'Not found' });
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
@@ -96,10 +96,21 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && action === 'key-send') {
       const b = JSON.parse(bodyText);
       if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Only owner may distribute keys' });
-      if (!family.members.has(b.recipientDeviceId) || b.recipientDeviceId === family.ownerDeviceId || typeof b.nonce !== 'string' || typeof b.ciphertext !== 'string') return json(res, 400, { error: 'Invalid key package' });
+      if (b.epoch !== family.keyEpoch || !family.members.has(b.recipientDeviceId) || b.recipientDeviceId === family.ownerDeviceId || typeof b.nonce !== 'string' || typeof b.ciphertext !== 'string') return json(res, 400, { error: 'Invalid key package' });
       const senderDeviceId = req.headers['x-device-id'];
       family.keyPackages.set(b.recipientDeviceId, { recipientDeviceId: b.recipientDeviceId, nonce: b.nonce, ciphertext: b.ciphertext, senderDeviceId, epoch: family.keyEpoch });
       return json(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && action === 'rotation-complete') {
+      if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Owner required' });
+      const b = JSON.parse(bodyText);
+      if (!family.rotationRequired || b.epoch !== family.keyEpoch) return json(res, 409, { error: 'Invalid rotation epoch' });
+      for (const deviceId of family.members.keys()) {
+        if (deviceId !== family.ownerDeviceId && family.keyPackages.get(deviceId)?.epoch !== family.keyEpoch)
+          return json(res, 409, { error: 'Missing key package for member' });
+      }
+      family.rotationRequired = false;
+      return json(res, 200, { keyEpoch: family.keyEpoch, rotationRequired: false });
     }
     if (req.method === 'POST' && action === 'revoke') {
       if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Owner required' });
