@@ -43,21 +43,27 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
   const exchange = await relay.getKeyExchange(familyId);
   const members = await verifiedMembers(familyId, exchange.members);
   if (owner) {
-    await FamilyLocation.createFamilyKey(familyId);
+    if (exchange.ownerDeviceId !== identity.deviceId) throw new Error('Not family owner');
+    if (exchange.rotationRequired) {
+      await FamilyLocation.rotateFamilyKey(familyId);
+    } else {
+      await FamilyLocation.createFamilyKey(familyId);
+    }
     for (const member of members.values()) {
       if (member.deviceId === identity.deviceId) continue;
-      const wrapped = await FamilyLocation.exportFamilyKeyForMember(familyId, member.exchangePublicKey, identity.deviceId, member.deviceId, 1);
-      await relay.sendKeyPackage(familyId, member.deviceId, wrapped.nonce, wrapped.ciphertext);
+      const wrapped = await FamilyLocation.exportFamilyKeyForMember(familyId, member.exchangePublicKey, identity.deviceId, member.deviceId, exchange.keyEpoch);
+      await relay.sendKeyPackage(familyId, member.deviceId, wrapped.nonce, wrapped.ciphertext, exchange.keyEpoch);
     }
+    if (exchange.rotationRequired) await relay.completeRotation(familyId, exchange.keyEpoch);
     return true;
   }
   if (await FamilyLocation.hasFamilyKey(familyId)) return true;
   for (const packet of exchange.packages) {
     const sender = members.get(packet.senderDeviceId);
-    if (!sender || packet.recipientDeviceId !== identity.deviceId) continue;
+    if (!sender || packet.senderDeviceId !== exchange.ownerDeviceId || packet.epoch !== exchange.keyEpoch || packet.recipientDeviceId !== identity.deviceId) continue;
     await FamilyLocation.importFamilyKeyFromMember(
       familyId, sender.exchangePublicKey, packet.nonce, packet.ciphertext,
-      packet.senderDeviceId, packet.recipientDeviceId, 1,
+      packet.senderDeviceId, packet.recipientDeviceId, packet.epoch,
     );
     return true;
   }
