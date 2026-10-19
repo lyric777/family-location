@@ -42,11 +42,14 @@ class FamilyLocationModule : Module() {
       FamilyCrypto.importKeyFromMember(requireNotNull(appContext.reactContext), familyId, senderPublicKey, nonce, ciphertext, senderId, recipientId, epoch)
     }
 
+    AsyncFunction("getFamilyKeyEpoch") { familyId: String ->
+      FamilyCrypto.keyEpoch(requireNotNull(appContext.reactContext), familyId)
+    }
     AsyncFunction("hasFamilyKey") { familyId: String ->
       FamilyCrypto.hasKey(requireNotNull(appContext.reactContext), familyId)
     }
-    AsyncFunction("createFamilyKey") { familyId: String ->
-      FamilyCrypto.createKey(requireNotNull(appContext.reactContext), familyId)
+    AsyncFunction("createFamilyKey") { familyId: String, epoch: Int ->
+      FamilyCrypto.createKey(requireNotNull(appContext.reactContext), familyId, epoch)
     }
     AsyncFunction("encryptFamilyPayload") { familyId: String, plaintext: String, aad: String ->
       FamilyCrypto.encrypt(requireNotNull(appContext.reactContext), familyId, plaintext, aad)
@@ -54,8 +57,8 @@ class FamilyLocationModule : Module() {
     AsyncFunction("decryptFamilyPayload") { familyId: String, nonce: String, ciphertext: String, aad: String ->
       FamilyCrypto.decrypt(requireNotNull(appContext.reactContext), familyId, nonce, ciphertext, aad)
     }
-    AsyncFunction("rotateFamilyKey") { familyId: String ->
-      FamilyCrypto.rotateKey(requireNotNull(appContext.reactContext), familyId)
+    AsyncFunction("rotateFamilyKey") { familyId: String, epoch: Int ->
+      FamilyCrypto.rotateKey(requireNotNull(appContext.reactContext), familyId, epoch)
     }
     AsyncFunction("deleteFamilyKey") { familyId: String ->
       FamilyCrypto.deleteKey(requireNotNull(appContext.reactContext), familyId)
