@@ -91,21 +91,37 @@ object FamilyCrypto {
       cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(wrapping, "AES"), GCMParameterSpec(TAG_BITS, from64(nonce)))
       cipher.updateAAD(keyPackageContext(familyId, senderId, recipientId, epoch))
       val raw = cipher.doFinal(from64(ciphertext))
-      try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
+      try { storeKey(context, familyId, raw); setEpoch(context, familyId, epoch) } finally { raw.fill(0) }
+      setEpoch(context, familyId, epoch)
     } finally { wrapping.fill(0) }
+  }
+
+  fun keyEpoch(context: Context, familyId: String): Int {
+    val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("epoch:" + familyId, 0)
+    return if (hasKey(context, familyId)) stored else 0
+  }
+
+  private fun setEpoch(context: Context, familyId: String, epoch: Int) {
+    require(epoch > 0)
+    check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+      .putInt("epoch:" + familyId, epoch).commit())
   }
 
   fun hasKey(context: Context, familyId: String): Boolean =
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains(familyId)
 
-  fun createKey(context: Context, familyId: String) {
+  fun createKey(context: Context, familyId: String, epoch: Int) {
     require(familyId.isNotBlank())
-    if (hasKey(context, familyId)) return
+    if (hasKey(context, familyId)) {
+      require(keyEpoch(context, familyId) == epoch) { "Family key epoch mismatch" }
+      return
+    }
     val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
     try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
   }
 
-  fun rotateKey(context: Context, familyId: String) {
+  fun rotateKey(context: Context, familyId: String, epoch: Int) {
+    require(epoch > keyEpoch(context, familyId)) { "Rotation epoch must advance" }
     require(hasKey(context, familyId)) { "Cannot rotate missing family key" }
     val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
     try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
@@ -151,6 +167,6 @@ object FamilyCrypto {
   }
 
   fun deleteKey(context: Context, familyId: String) {
-    check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(familyId).commit())
+    check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(familyId).remove("epoch:" + familyId).commit())
   }
 }
