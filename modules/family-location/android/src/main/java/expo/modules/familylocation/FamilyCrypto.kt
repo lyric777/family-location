@@ -92,7 +92,6 @@ object FamilyCrypto {
       cipher.updateAAD(keyPackageContext(familyId, senderId, recipientId, epoch))
       val raw = cipher.doFinal(from64(ciphertext))
       try { storeKey(context, familyId, raw); setEpoch(context, familyId, epoch) } finally { raw.fill(0) }
-      setEpoch(context, familyId, epoch)
     } finally { wrapping.fill(0) }
   }
 
@@ -117,7 +116,7 @@ object FamilyCrypto {
       return
     }
     val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
-    try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
+    try { storeKey(context, familyId, raw); setEpoch(context, familyId, epoch) } finally { raw.fill(0) }
   }
 
   fun rotateKey(context: Context, familyId: String, epoch: Int) {
