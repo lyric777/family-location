@@ -19,11 +19,12 @@ type FamilyLocationNativeModule = {
   getExchangePublicKey(): Promise<string>;
   exportFamilyKeyForMember(familyId: string, peerPublicKey: string, senderId: string, recipientId: string, epoch: number): Promise<{ nonce: string; ciphertext: string }>;
   importFamilyKeyFromMember(familyId: string, senderPublicKey: string, nonce: string, ciphertext: string, senderId: string, recipientId: string, epoch: number): Promise<void>;
+  getFamilyKeyEpoch(familyId: string): Promise<number>;
   hasFamilyKey(familyId: string): Promise<boolean>;
-  createFamilyKey(familyId: string): Promise<void>;
+  createFamilyKey(familyId: string, epoch: number): Promise<void>;
   encryptFamilyPayload(familyId: string, plaintext: string, aad: string): Promise<{ nonce: string; ciphertext: string }>;
   decryptFamilyPayload(familyId: string, nonce: string, ciphertext: string, aad: string): Promise<string>;
-  rotateFamilyKey(familyId: string): Promise<void>;
+  rotateFamilyKey(familyId: string, epoch: number): Promise<void>;
   deleteFamilyKey(familyId: string): Promise<void>;
   start(): Promise<void>; consumeResumeSharingIntent(): Promise<boolean>; stop(): Promise<void>; setMode(mode: LocationMode): Promise<void>; setAutoMode(enabled: boolean): Promise<void>;
   getSnapshot(): NativeLocationSnapshot;
