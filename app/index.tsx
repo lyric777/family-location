@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
 import { applyCreatedFamily, applyJoinedFamily, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay } from '../src/core/transport/HttpFamilyRelay';
+import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 
@@ -48,7 +49,20 @@ export default function HomeScreen() {
   const [inviteInput, setInviteInput] = useState('');
   const [pairingBusy, setPairingBusy] = useState(false);
   const [identityReady, setIdentityReady] = useState(false);
+  const [keyStatus, setKeyStatus] = useState('Not checked');
   const relay = getConfiguredRelay();
+
+  const syncFamilyKey = async (familyId: string, owner: boolean) => {
+    if (!relay) return;
+    setKeyStatus('Synchronizing');
+    try {
+      const ready = await provisionFamilyKey(relay, familyId, owner);
+      setKeyStatus(ready ? 'Ready' : 'Waiting for owner');
+    } catch (error) {
+      setKeyStatus('Failed');
+      Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
+    }
+  };
 
   const refresh = useCallback(() => {
     if (Platform.OS === 'android') setSnapshot(FamilyLocation.getSnapshot());
@@ -139,6 +153,10 @@ export default function HomeScreen() {
               <Text style={styles.hint}>
                 {family.role === 'owner' ? 'Share this code with the second device.' : 'Joined through the LAN relay.'}
               </Text>
+              <Text style={styles.meta}>Family key: {keyStatus}</Text>
+              <Pressable style={styles.secondaryButton} onPress={() => syncFamilyKey(family.familyId!, family.role === 'owner')}>
+                <Text style={styles.secondaryButtonText}>Sync family key</Text>
+              </Pressable>
               <Text style={styles.meta}>Members: {family.memberDeviceIds.length}</Text>
               {family.memberDeviceIds.map((id) => <Text key={id} style={styles.hint}>• {id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>)}
               <Pressable
