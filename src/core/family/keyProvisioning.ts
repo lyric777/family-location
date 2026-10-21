@@ -45,9 +45,11 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
   if (owner) {
     if (exchange.ownerDeviceId !== identity.deviceId) throw new Error('Not family owner');
     if (exchange.rotationRequired) {
-      await FamilyLocation.rotateFamilyKey(familyId);
+      if (await FamilyLocation.getFamilyKeyEpoch(familyId) < exchange.keyEpoch) {
+        await FamilyLocation.rotateFamilyKey(familyId, exchange.keyEpoch);
+      }
     } else {
-      await FamilyLocation.createFamilyKey(familyId);
+      await FamilyLocation.createFamilyKey(familyId, exchange.keyEpoch);
     }
     for (const member of members.values()) {
       if (member.deviceId === identity.deviceId) continue;
@@ -57,7 +59,7 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
     if (exchange.rotationRequired) await relay.completeRotation(familyId, exchange.keyEpoch);
     return true;
   }
-  if (await FamilyLocation.hasFamilyKey(familyId)) return true;
+  if (await FamilyLocation.getFamilyKeyEpoch(familyId) === exchange.keyEpoch) return true;
   for (const packet of exchange.packages) {
     const sender = members.get(packet.senderDeviceId);
     if (!sender || packet.senderDeviceId !== exchange.ownerDeviceId || packet.epoch !== exchange.keyEpoch || packet.recipientDeviceId !== identity.deviceId) continue;
