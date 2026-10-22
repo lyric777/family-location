@@ -123,7 +123,7 @@ object FamilyCrypto {
     require(epoch > keyEpoch(context, familyId)) { "Rotation epoch must advance" }
     require(hasKey(context, familyId)) { "Cannot rotate missing family key" }
     val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
-    try { storeKey(context, familyId, raw) } finally { raw.fill(0) }
+    try { storeKey(context, familyId, raw); setEpoch(context, familyId, epoch) } finally { raw.fill(0) }
   }
 
   private fun storeKey(context: Context, familyId: String, raw: ByteArray) {
