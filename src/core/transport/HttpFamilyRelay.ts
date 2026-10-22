@@ -26,7 +26,7 @@ export class HttpFamilyRelay {
     return this.request<JoinFamilyResponse>('/v1/families/join', { method: 'POST', body: JSON.stringify(request) });
   }
 
-  private async authorized<T>(familyId: string, action: 'members' | 'publish' | 'snapshot' | 'key-register' | 'key-read' | 'key-send' | 'rotation-complete' | 'revoke', path: string, init?: RequestInit): Promise<T> {
+  private async authorized<T>(familyId: string, action: 'members' | 'publish' | 'snapshot' | 'key-register' | 'key-read' | 'key-send' | 'rotation-complete' | 'revoke' | 'leave', path: string, init?: RequestInit): Promise<T> {
     const identity = await FamilyLocation.getDeviceIdentity();
     const { nonce } = await this.request<{ nonce: string }>('/v1/auth/challenge', {
       method: 'POST',
@@ -72,6 +72,14 @@ export class HttpFamilyRelay {
     return this.authorized<{ keyEpoch: number; rotationRequired: boolean }>(familyId, 'rotation-complete', '/v1/families/' + encodeURIComponent(familyId) + '/rotation-complete', {
       method: 'POST', body: JSON.stringify({ epoch }),
     });
+  }
+
+  leaveFamily(familyId: string) {
+    return this.authorized<{ ok: boolean; keyEpoch: number; rotationRequired: boolean }>(
+      familyId, 'leave', '/v1/families/' + encodeURIComponent(familyId) + '/leave', {
+        method: 'POST', body: '{}',
+      },
+    );
   }
 
   revokeMember(familyId: string, deviceId: string) {
