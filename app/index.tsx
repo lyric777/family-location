@@ -189,6 +189,7 @@ export default function HomeScreen() {
                     const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
                     setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId)));
                     await persistFamilyState();
+                    await syncFamilyKey(result.familyId, true);
                   } catch (error) {
                     Alert.alert('Cannot create family', error instanceof Error ? error.message : 'Relay error');
                   } finally {
