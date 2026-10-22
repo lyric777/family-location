@@ -81,7 +81,15 @@ export default function HomeScreen() {
       refresh();
     };
     initializeFamilyState().then((loaded) => {
-      if (mounted) { setFamily(loaded); setIdentityReady(true); }
+      if (!mounted) return;
+      setFamily(loaded);
+      setIdentityReady(true);
+      if (loaded.familyId && relay) {
+        setKeyStatus('Synchronizing');
+        provisionFamilyKey(relay, loaded.familyId, loaded.role === 'owner')
+          .then((ready) => { if (mounted) setKeyStatus(ready ? 'Ready' : 'Waiting for owner'); })
+          .catch(() => { if (mounted) setKeyStatus('Retry required'); });
+      }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
     initialize();
     const timer = setInterval(refresh, 2_000);
@@ -221,6 +229,7 @@ export default function HomeScreen() {
                     const result = await relay.joinFamily({ inviteCode: inviteInput.trim().toUpperCase(), deviceId: family.device.deviceId, devicePublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
                     setFamily(applyJoinedFamily(result.familyId, inviteInput, result.members.map((member) => member.deviceId)));
                     await persistFamilyState();
+                    await syncFamilyKey(result.familyId, false);
                   } catch (error) {
                     Alert.alert('Cannot join family', error instanceof Error ? error.message : 'Relay error');
                   } finally {
