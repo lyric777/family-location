@@ -53,12 +53,12 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
-      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'rotation-complete'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
+      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
       return json(res, 200, { nonce });
     }
-    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|leave|rotation-complete)$/);
+    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|leave|dissolve|rotation-complete)$/);
     if (!match) return json(res, 404, { error: 'Not found' });
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
@@ -111,6 +111,17 @@ http.createServer(async (req, res) => {
       }
       family.rotationRequired = false;
       return json(res, 200, { keyEpoch: family.keyEpoch, rotationRequired: false });
+    }
+    if (req.method === 'POST' && action === 'dissolve') {
+      if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Owner required' });
+      families.delete(family.familyId);
+      for (const [inviteCode, invite] of invites) {
+        if (invite.familyId === family.familyId) invites.delete(inviteCode);
+      }
+      for (const [nonce, challenge] of challenges) {
+        if (challenge.familyId === family.familyId) challenges.delete(nonce);
+      }
+      return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && action === 'leave') {
       const departing = req.headers['x-device-id'];
