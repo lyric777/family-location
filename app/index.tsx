@@ -181,8 +181,34 @@ export default function HomeScreen() {
                 }}>
                 <Text style={styles.secondaryButtonText}>Refresh members</Text>
               </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={async () => setFamily(await clearPersistedFamily())}>
-                <Text style={styles.secondaryButtonText}>Reset family</Text>
+              <Pressable style={styles.secondaryButton} disabled={pairingBusy} onPress={() => {
+                const familyId = family.familyId;
+                if (!familyId || !relay) return;
+                const isOwner = family.role === 'owner';
+                Alert.alert(
+                  isOwner ? 'Dissolve family?' : 'Leave family?',
+                  isOwner ? 'This ends the family for all members.' : 'You will lose access to this family.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: isOwner ? 'Dissolve' : 'Leave', style: 'destructive', onPress: async () => {
+                      setPairingBusy(true);
+                      try {
+                        if (isOwner) await relay.dissolveFamily(familyId);
+                        else await relay.leaveFamily(familyId);
+                        await FamilyLocation.stop();
+                        await FamilyLocation.deleteFamilyKey(familyId);
+                        setFamily(await clearPersistedFamily());
+                        setKeyStatus('Not checked');
+                      } catch (error) {
+                        Alert.alert('Cannot update family', error instanceof Error ? error.message : String(error));
+                      } finally {
+                        setPairingBusy(false);
+                      }
+                    } },
+                  ],
+                );
+              }}>
+                <Text style={styles.secondaryButtonText}>{family.role === 'owner' ? 'Dissolve family' : 'Leave family'}</Text>
               </Pressable>
             </>
           ) : (
