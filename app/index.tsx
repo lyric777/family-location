@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -51,6 +52,9 @@ export default function HomeScreen() {
   const [identityReady, setIdentityReady] = useState(false);
   const [keyStatus, setKeyStatus] = useState('Not checked');
   const relay = getConfiguredRelay();
+  const familyRef = useRef(family);
+  const syncInFlight = useRef(false);
+  familyRef.current = family;
 
   const syncFamilyKey = async (familyId: string, owner: boolean) => {
     if (!relay) return;
@@ -93,9 +97,27 @@ export default function HomeScreen() {
     }).catch((error) => Alert.alert('Device identity error', String(error)));
     initialize();
     const timer = setInterval(refresh, 2_000);
+    // While the UI is active, automatically deliver keys to newly joined members
+    // and recover after revocation/rotation. Never run overlapping exchanges.
+    const keyTimer = setInterval(async () => {
+      const current = familyRef.current;
+      if (AppState.currentState !== 'active' || !relay || !current.familyId || syncInFlight.current) return;
+      syncInFlight.current = true;
+      try {
+        const ready = await provisionFamilyKey(relay, current.familyId, current.role === 'owner');
+        if (mounted && familyRef.current.familyId === current.familyId) {
+          setKeyStatus(ready ? 'Ready' : 'Connecting');
+        }
+      } catch {
+        if (mounted && familyRef.current.familyId === current.familyId) setKeyStatus('Retrying');
+      } finally {
+        syncInFlight.current = false;
+      }
+    }, 15_000);
     return () => {
       mounted = false;
       clearInterval(timer);
+      clearInterval(keyTimer);
     };
   }, [refresh]);
 
