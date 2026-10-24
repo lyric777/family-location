@@ -166,7 +166,36 @@ export default function HomeScreen() {
                 <Text style={styles.secondaryButtonText}>Sync family key</Text>
               </Pressable>
               <Text style={styles.meta}>Members: {family.memberDeviceIds.length}</Text>
-              {family.memberDeviceIds.map((id) => <Text key={id} style={styles.hint}>• {id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>)}
+              {family.memberDeviceIds.map((id) => (
+                <View key={id} style={styles.row}>
+                  <Text style={styles.hint}>{id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>
+                  {family.role === 'owner' && id !== family.device.deviceId ? (
+                    <Pressable disabled={pairingBusy} onPress={() => {
+                      if (!relay || !family.familyId) return;
+                      const familyId = family.familyId;
+                      Alert.alert('Remove member?', 'This device will lose access to the family.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Remove', style: 'destructive', onPress: async () => {
+                          setPairingBusy(true);
+                          try {
+                            await relay.revokeMember(familyId, id);
+                            const members = await relay.getMembers(familyId);
+                            setFamily(updateMembers(members.members.map((m) => m.deviceId)));
+                            await persistFamilyState();
+                            await syncFamilyKey(familyId, true);
+                          } catch (error) {
+                            Alert.alert('Cannot remove member', error instanceof Error ? error.message : String(error));
+                          } finally {
+                            setPairingBusy(false);
+                          }
+                        } },
+                      ]);
+                    }}>
+                      <Text style={styles.secondaryButtonText}>Remove</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ))}
               <Pressable
                 style={styles.secondaryButton}
                 onPress={async () => {
