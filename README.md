@@ -29,7 +29,7 @@ React Native
 
 Android native
   |-- foreground location service
-  |-- fused location provider
+  |-- Android platform location provider
   |-- Android Keystore device identity
   |-- boot/network recovery
   `-- notification + permissions
@@ -60,32 +60,31 @@ OTA is for compatible JavaScript and asset changes. Changes to native Android co
 
 - Location permissions
 - Android foreground location service
-- Fused Location Provider
+- Android platform location APIs (no GMS requirement)
 - Adaptive sampling modes: idle / moving / live-view
 - Local diagnostics and battery tests
 - Reboot and network-change recovery
 
-Milestone 1 is implemented: a local Expo Module starts an Android foreground service, receives Fused Location Provider updates, persists the latest sample locally, and exposes service diagnostics to React Native. See `docs/phase-1.md` for the acceptance test.
+A local Expo Module runs an Android foreground service, collects location updates, persists the latest sample, and exposes diagnostics to React Native. Background behavior and adaptive motion modes have been tested on an OPPO device; see `docs/phase-1.md` for the original milestone test (historical details may be outdated).
 
-No map and no P2P yet. The goal is to prove that location collection is reliable enough on real devices.
+### Phase 2 - Family pairing + secure location sharing
 
-### Phase 2 - Local history + map
+- 2.0–2.1: Family-sharing foundation and LAN relay
+- 2.2: Two-device family pairing with invitation codes (OPPO + emulator acceptance passed)
+- 2.3.1: Android Keystore device identity and persistent family membership
+- 2.3.2: Signed device authentication, encrypted family key exchange, Owner/Member permissions, revocation and key rotation
+- 2.3.3: End-to-end encrypted location sync, native background upload and rotated-key retrieval
+- QR pairing and automatic two-device Ready confirmation
+
+No email, phone number, or password is required for the user-facing identity model. See [Phase 2.3 notes](docs/phase-2-3.md) for implementation and acceptance details.
+
+### Phase 3 - Local history + map
 
 - Local database
 - Location history retention
-- Current-location map
+- Current-location map and family member locations
 - Track rendering
 - Diagnostics screen
-
-### Phase 3 - Device identity + family pairing
-
-- Device keypair in Android Keystore
-- Device ID derived from public identity
-- QR / invitation pairing
-- Family membership
-- Device revoke / replacement flow
-
-No email, phone number, or password is required for the user-facing identity model.
 
 ### Phase 4 - P2P transport
 
@@ -127,4 +126,4 @@ The app will not implement covert microphone activation or hidden listening.
 
 ## Status
 
-Phase 1 foreground location service has been implemented and tested on Android. The current development focus is secure family pairing and location synchronization; see [Phase 2.3 notes](docs/phase-2-3.md) for progress and acceptance details.
+Phase 1 native location service has been tested on Android, and Phase 2.2 family pairing passed two-device acceptance. Phase 2.3 secure family sharing is under development; see [Phase 2.3 notes](docs/phase-2-3.md) for detailed progress.
