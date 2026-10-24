@@ -1,130 +1,106 @@
 # Family Location
 
-Privacy-first family location sharing and communication for Android, built with React Native and native Android capabilities.
+Privacy-first Android family location sharing, built with React Native (Expo) and native Android services.
 
-## Goals
+> **Development status (2026-10-24):** Phase 2.2 family pairing passed an OPPO phone + Android emulator acceptance test. Phase 2.3 secure pairing, key management, and location synchronization is **in development and not yet accepted**. Do not use the current LAN relay to share real family locations or expose it to the public internet.
 
-- No traditional account/password required
-- Device-to-device family pairing
-- Long-running Android location sharing via a foreground service
-- Adaptive location sampling for battery efficiency
-- Local-first location history
-- Family walkie-talkie / push-to-talk over end-to-end encrypted audio
-- Emergency family calling with clear microphone/call indicators
-- P2P-first transport with relay fallback
-- End-to-end encrypted family data
-- OTA updates for JavaScript/assets through `expo-updates` (xprem-compatible)
+## Product goals
 
-## Architecture direction
+- No traditional account, phone number, or password required for device-based family identity.
+- Explicit, consent-based family location sharing with clear start/stop controls.
+- Reliable native Android foreground location service, including locked-screen operation, with battery-aware IDLE / MOVING / LIVE modes.
+- End-to-end encrypted family location data: the relay must not receive plaintext coordinates or raw family content keys.
+- Simple in-person family pairing using a short invitation code (QR-based entry is planned).
+- Future: local history and map, P2P-first transport with relay fallback, family push-to-talk/calling, and OTA updates.
 
-React Native owns the product UI and application-level orchestration. Reliability-critical Android behavior lives in native Android code behind a small RN bridge/module boundary.
+## Architecture
 
 ```text
-React Native
-  |-- map / family UI
-  |-- pairing / settings
-  |-- history
-  |-- walkie-talkie / call UI
-  `-- transport orchestration
+React Native / Expo
+  |-- family pairing and member-management UI
+  |-- diagnostics and sharing controls
+  |-- key-provisioning orchestration (current prototype)
+  `-- future map and history UI
 
-Android native
-  |-- foreground location service
-  |-- fused location provider
-  |-- Android Keystore device identity
-  |-- boot/network recovery
-  `-- notification + permissions
+Native Android (Expo module)
+  |-- foreground location service and adaptive sampling
+  |-- location/sensor diagnostics
+  |-- Android Keystore signing and ECDH identities
+  `-- AES-GCM family key management
 
-Transport
-  |-- signaling / rendezvous (lightweight backend)
-  |-- WebRTC data channel (P2P-first)
-  |-- WebRTC audio
-  `-- TURN relay fallback
+Development LAN relay (Node.js)
+  |-- family creation and invitation redemption
+  |-- challenge/signature authentication and membership checks
+  |-- encrypted family key package forwarding
+  `-- latest opaque location envelopes (not yet integrated end to end)
 ```
 
-## OTA policy
+The current Node.js relay is an in-memory **development prototype**, not a persistent production backend. The planned WebRTC/P2P transport and TURN fallback are **not implemented**.
 
-This app is designed to use `expo-updates`, so xprem can be used as the OTA server because it implements the Expo Updates protocol.
+Core Android location and cryptographic functions should not depend on Google Mobile Services (GMS). See the phase documentation for actual device-test status.
 
-OTA is for compatible JavaScript and asset changes. Changes to native Android code, native dependencies, permissions, foreground-service declarations, or the JS/native contract require a new binary/runtime version rather than an OTA-only release.
+## Current milestones
 
-## Development phases
+| Milestone | Status | Notes |
+| --- | --- | --- |
+| Phase 0 - Bootstrap | Implemented | Expo, React Native, native module, development build |
+| Phase 1 - Native location reliability | Implemented and iteratively tested | OPPO foreground service, motion/IDLE/MOVING behavior and recent-app swipe handling; see Phase 1 notes |
+| Phase 2.0 - Family sharing foundation | Code implemented | Phase-specific details tracked in project history |
+| Phase 2.1 - LAN relay / pairing foundation | Code implemented | Earlier iterations tested |
+| Phase 2.2 - Two-device family pairing | **Accepted** | OPPO created a family; emulator joined; both reported two members |
+| Phase 2.3.1 - Persistent device identity | Code committed, validation pending | Keystore identity and local membership persistence |
+| Phase 2.3.2 - Secure pairing and key lifecycle | **In progress** | Signed requests, ECDH, AES-GCM, owner/member actions, epoch rotation; no end-to-end acceptance yet |
+| Phase 2.3.3 - Encrypted background location sync | Planned | Native upload, peer decryption/display, background rotated-key receipt |
+| Later - Map/history, P2P, communication and release hardening | Planned | Not implemented |
 
-### Phase 0 - Bootstrap
+**Important:** The Phase 2.2 acceptance applies to the older pairing protocol, not automatically to the current `main` branch. Code committed does not mean tested or released.
 
-- React Native + Expo modules / development build
-- Android-first project
-- `expo-updates` integration boundary
-- Basic lint/typecheck/project structure
+## Family membership rules
 
-### Phase 1 - Background location reliability
+- **Owner:** creates a family, invites members, removes other members, and may dissolve the family.
+- **Member:** joins by invitation and can voluntarily leave; cannot remove others or dissolve the family.
+- **Initial pairing:** both devices are in the foreground; joining should finish automatically only when **both devices have confirmed** the same usable family key. A manual key-sync button is for development only.
+- **Membership change:** the relay revokes access immediately and pauses new publication until the owner rotates the family key and distributes it to remaining members. Owner rotation can wait until the owner next opens the app.
+- **Remaining members:** the intended Phase 2.3.3 behavior is to retrieve already-distributed rotated keys via a running native foreground service, without opening the React UI. This is **not yet implemented**.
+- **Daily sharing:** encrypted background location updates must work with the screen locked, independently of React UI. Explicit user stop and recent-app swipe follow the established sharing-stop behavior.
 
-- Location permissions
-- Android foreground location service
-- Fused Location Provider
-- Adaptive sampling modes: idle / moving / live-view
-- Local diagnostics and battery tests
-- Reboot and network-change recovery
+## Local development
 
-Milestone 1 is implemented: a local Expo Module starts an Android foreground service, receives Fused Location Provider updates, persists the latest sample locally, and exposes service diagnostics to React Native. See `docs/phase-1.md` for the acceptance test.
+Prerequisites: Node.js 20+, Android SDK / emulator or physical Android device, and the Expo/Gradle build toolchain.
 
-No map and no P2P yet. The goal is to prove that location collection is reliable enough on real devices.
+```bash
+npm install
+npm run typecheck
+npm run lint
+npm run relay:dev
+```
 
-### Phase 2 - Local history + map
+Configure the development relay URL through the project's `EXPO_PUBLIC_RELAY_URL` environment setting. Physical devices must be able to reach the host on the same LAN; `localhost` inside an emulator/phone is not the host computer.
 
-- Local database
-- Location history retention
-- Current-location map
-- Track rendering
-- Diagnostics screen
+To build an Android development client:
 
-### Phase 3 - Device identity + family pairing
+```bash
+npx expo run:android
+```
 
-- Device keypair in Android Keystore
-- Device ID derived from public identity
-- QR / invitation pairing
-- Family membership
-- Device revoke / replacement flow
+Windows release-preview build (requires generated Android project and toolchain):
 
-No email, phone number, or password is required for the user-facing identity model.
+```powershell
+npm run android:preview
+```
 
-### Phase 4 - P2P transport
+Native Kotlin, manifest, permissions, or native bridge changes require a rebuilt APK. JavaScript-only changes may be reloaded through the development client or delivered via a compatible OTA runtime. `expo-updates` is present; an xprem-compatible OTA deployment remains a separate configuration/release task.
 
-- Signaling/rendezvous backend
-- WebRTC ICE
-- STUN
-- DataChannel
-- Heartbeat + reconnect
-- Wi-Fi/mobile-network switching tests
-- Transport abstraction so WebRTC can be replaced or supplemented later
+## Documentation
 
-### Phase 5 - Production reliability
+- [Phase 1 - background location reliability](docs/phase-1.md) - initial milestone and historical test procedure; some implementation details are outdated.
+- [Phase 2.3 - secure family synchronization](docs/phase-2-3.md) - **current authoritative requirements, implementation status, open risks, and acceptance gate**.
 
-- TURN fallback
-- Encrypted offline catch-up/synchronization
-- Connection health UI
-- OEM battery-optimization guidance
-- Failure telemetry without collecting location content
+## Next acceptance gate
 
-### Phase 6 - Family walkie-talkie and calling
+1. Finish the two-device Ready handshake and remove the need for manual key synchronization.
+2. Run TypeScript/lint, Kotlin/Gradle build, and relay protocol/security tests.
+3. Test OPPO + emulator: pairing, restart persistence, shared-key proof, member leave/revoke, owner dissolution, key rotation, and unauthorized request rejection.
+4. Implement and verify native encrypted background location sync in Phase 2.3.3.
 
-- Push-to-talk / walkie-talkie as a core family communication mode
-- Explicit family call / intercom UX
-- WebRTC audio
-- Emergency family calling
-- Android microphone foreground-service handling
-- Clear in-use microphone/call indicators
-
-The app will not implement covert microphone activation or hidden listening.
-
-### Phase 7 - Small-scale release
-
-- Privacy policy and consent UX
-- Abuse prevention / revoke controls
-- OTA production + preview channels
-- Release signing
-- Crash/reliability monitoring
-- Store/distribution preparation
-
-## Status
-
-Phase 1 in progress — foreground location service milestone ready for emulator validation.
+Do not treat current `main` as production-ready or use it to publish real location data until the above tests and privacy requirements pass.
