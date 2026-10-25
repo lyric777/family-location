@@ -57,9 +57,15 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
       await relay.sendKeyPackage(familyId, member.deviceId, wrapped.nonce, wrapped.ciphertext, exchange.keyEpoch);
     }
     if (exchange.rotationRequired) await relay.completeRotation(familyId, exchange.keyEpoch);
-    return true;
+    const confirmation = await FamilyLocation.getFamilyKeyConfirmation(familyId, exchange.keyEpoch);
+    await relay.confirmFamilyKey(familyId, exchange.keyEpoch, confirmation);
+    return (await relay.getFamilyKeyStatus(familyId)).allReady;
   }
-  if (await FamilyLocation.getFamilyKeyEpoch(familyId) === exchange.keyEpoch) return true;
+  if (await FamilyLocation.getFamilyKeyEpoch(familyId) === exchange.keyEpoch) {
+    const confirmation = await FamilyLocation.getFamilyKeyConfirmation(familyId, exchange.keyEpoch);
+    await relay.confirmFamilyKey(familyId, exchange.keyEpoch, confirmation);
+    return (await relay.getFamilyKeyStatus(familyId)).allReady;
+  }
   for (const packet of exchange.packages) {
     const sender = members.get(packet.senderDeviceId);
     if (!sender || packet.senderDeviceId !== exchange.ownerDeviceId || packet.epoch !== exchange.keyEpoch || packet.recipientDeviceId !== identity.deviceId) continue;
@@ -67,7 +73,9 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
       familyId, sender.exchangePublicKey, packet.nonce, packet.ciphertext,
       packet.senderDeviceId, packet.recipientDeviceId, packet.epoch,
     );
-    return true;
+    const confirmation = await FamilyLocation.getFamilyKeyConfirmation(familyId, packet.epoch);
+    await relay.confirmFamilyKey(familyId, packet.epoch, confirmation);
+    return (await relay.getFamilyKeyStatus(familyId)).allReady;
   }
   return false;
 }
