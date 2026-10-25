@@ -35,7 +35,7 @@ http.createServer(async (req, res) => {
       if (!validKey(b.ownerPublicKey) || deviceIdFor(b.ownerPublicKey) !== b.ownerDeviceId) return json(res, 400, { error: 'Invalid device identity' });
       const familyId = 'fam_' + randomUUID();
       let inviteCode = code(); while (invites.has(inviteCode)) inviteCode = code();
-      const family = { familyId, ownerDeviceId: b.ownerDeviceId, keyEpoch: 1, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map(), keyPackages: new Map() };
+      const family = { familyId, ownerDeviceId: b.ownerDeviceId, keyEpoch: 1, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map(), keyPackages: new Map(), ready: new Map() };
       families.set(familyId, family);
       invites.set(inviteCode, { familyId, expiresAt: Date.now() + 10 * 60_000, uses: 0 });
       return json(res, 201, { familyId, inviteCode, members: publicMembers(family) });
@@ -53,12 +53,12 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
-      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
+      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete', 'key-ready', 'key-status'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
       return json(res, 200, { nonce });
     }
-    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|leave|dissolve|rotation-complete)$/);
+    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|leave|dissolve|rotation-complete|key-ready|key-status)$/);
     if (!match) return json(res, 404, { error: 'Not found' });
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
@@ -72,6 +72,28 @@ http.createServer(async (req, res) => {
       return Buffer.concat(chunks).toString('utf8');
     })() : '';
     if (!authenticate(req, family, action, bodyText)) return json(res, 403, { error: 'Authentication failed' });
+    if (req.method === 'POST' && action === 'key-ready') {
+      const b = JSON.parse(bodyText);
+      if (b.epoch !== family.keyEpoch || typeof b.confirmation !== 'string' ||
+          !/^[A-Za-z0-9+/]{43}=$/.test(b.confirmation)) {
+        return json(res, 400, { error: 'Invalid key confirmation' });
+      }
+      const deviceId = req.headers['x-device-id'];
+      family.ready.set(deviceId, { epoch: b.epoch, confirmation: b.confirmation });
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && action === 'key-status') {
+      const active = [...family.members.keys()];
+      const confirmations = active.map(id => family.ready.get(id))
+        .filter(entry => entry?.epoch === family.keyEpoch);
+      const complete = confirmations.length === active.length &&
+        confirmations.every(entry => entry.confirmation === confirmations[0].confirmation);
+      return json(res, 200, {
+        epoch: family.keyEpoch,
+        readyDeviceIds: active.filter(id => family.ready.get(id)?.epoch === family.keyEpoch),
+        allReady: complete && !family.rotationRequired,
+      });
+    }
     if (req.method === 'POST' && action === 'key-register') {
       const b = JSON.parse(bodyText);
       if (!validKey(b.exchangePublicKey) || typeof b.bindingSignature !== 'string') return json(res, 400, { error: 'Invalid exchange key' });
@@ -130,6 +152,7 @@ http.createServer(async (req, res) => {
       family.keyPackages.clear();
       family.latest.clear();
       family.keyEpoch++;
+      family.ready.clear();
       family.rotationRequired = true;
       return json(res, 200, { ok: true, keyEpoch: family.keyEpoch, rotationRequired: true });
     }
