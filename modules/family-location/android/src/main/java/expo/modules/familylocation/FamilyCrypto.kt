@@ -145,6 +145,18 @@ object FamilyCrypto {
     return cipher.doFinal(from64(json.getString("data")))
   }
 
+  fun keyConfirmation(context: Context, familyId: String, epoch: Int): String {
+    require(keyEpoch(context, familyId) == epoch) { "Key epoch mismatch" }
+    val raw = loadKey(context, familyId)
+    try {
+      val mac = Mac.getInstance("HmacSHA256")
+      mac.init(SecretKeySpec(raw, "HmacSHA256"))
+      val contextBytes = org.json.JSONArray().put("family-ready-v1").put(familyId).put(epoch)
+        .toString().toByteArray(Charsets.UTF_8)
+      return b64(mac.doFinal(contextBytes))
+    } finally { raw.fill(0) }
+  }
+
   fun encrypt(context: Context, familyId: String, plaintext: String, aad: String): Map<String, String> {
     val raw = loadKey(context, familyId)
     try {
