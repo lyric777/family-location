@@ -19,6 +19,7 @@ type FamilyLocationNativeModule = {
   getExchangePublicKey(): Promise<string>;
   exportFamilyKeyForMember(familyId: string, peerPublicKey: string, senderId: string, recipientId: string, epoch: number): Promise<{ nonce: string; ciphertext: string }>;
   importFamilyKeyFromMember(familyId: string, senderPublicKey: string, nonce: string, ciphertext: string, senderId: string, recipientId: string, epoch: number): Promise<void>;
+  getFamilyKeyConfirmation(familyId: string, epoch: number): Promise<string>;
   getFamilyKeyEpoch(familyId: string): Promise<number>;
   hasFamilyKey(familyId: string): Promise<boolean>;
   createFamilyKey(familyId: string, epoch: number): Promise<void>;
