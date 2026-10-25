@@ -1,6 +1,6 @@
 # Phase 2.3 - Secure family location synchronization
 
-Updated: 2026-10-24. This document is the current Phase 2.3 handoff and acceptance specification. Implementation claims below are based on repository inspection and prior acceptance reports, not a fresh Android build.
+Updated: 2026-10-25. This document is the current Phase 2.3 handoff and acceptance specification. Implementation claims below are based on repository inspection and prior acceptance reports, not a fresh Android build.
 
 ## Confirmed product decisions
 
@@ -29,7 +29,7 @@ OPPO physical Android phone created a family, emulator joined via the LAN relay,
 | Auto provisioning after create/join/restore | Code committed; integration tests pending |
 | Active-screen retry every 15 seconds | Code committed; not background execution |
 | Owner Remove, Member Leave, Owner Dissolve UI | Code committed; Android validation pending |
-| Both-sides Ready handshake / confirmation | Not implemented |
+| Both-sides Ready handshake / confirmation | Initial signed member confirmation and shared-key check committed; untested on devices |
 | Native background receipt of rotated keys | Not implemented; Phase 2.3.3 |
 | Native background encrypted location upload and peer display | Not implemented; Phase 2.3.3 |
 | TypeScript / Kotlin build and security test suite | Not yet completed |
@@ -47,7 +47,7 @@ OPPO physical Android phone created a family, emulator joined via the LAN relay,
 
 ## Next steps and acceptance gate
 
-1. Implement both-sides Ready confirmation, fix pending pairing states, and harden key-rotation recovery.
+1. Validate the new both-sides Ready confirmation with OPPO and emulator, fix pending pairing states, and harden key-rotation recovery.
 2. Run TypeScript checks, Kotlin/Gradle compilation, and relay protocol tests.
 3. Verify OPPO + emulator: initial pairing, restart identity persistence, same-key proof, leave/revoke/dissolve, epoch rotation, unauthorized access denial.
 4. Phase 2.3.3: native encrypted background location upload, peer-location read/decrypt, and native receipt of rotated keys.
