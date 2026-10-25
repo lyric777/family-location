@@ -42,6 +42,9 @@ class FamilyLocationModule : Module() {
       FamilyCrypto.importKeyFromMember(requireNotNull(appContext.reactContext), familyId, senderPublicKey, nonce, ciphertext, senderId, recipientId, epoch)
     }
 
+    AsyncFunction("getFamilyKeyConfirmation") { familyId: String, epoch: Int ->
+      FamilyCrypto.keyConfirmation(requireNotNull(appContext.reactContext), familyId, epoch)
+    }
     AsyncFunction("getFamilyKeyEpoch") { familyId: String ->
       FamilyCrypto.keyEpoch(requireNotNull(appContext.reactContext), familyId)
     }
