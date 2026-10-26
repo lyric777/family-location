@@ -46,7 +46,9 @@ http.createServer(async (req, res) => {
       if (!invite || invite.expiresAt < Date.now() || invite.uses >= 1) return json(res, 404, { error: 'Invite invalid or expired' });
       if (!validKey(b.devicePublicKey) || deviceIdFor(b.devicePublicKey) !== b.deviceId) return json(res, 400, { error: 'Invalid device identity' });
       const family = families.get(invite.familyId);
+      if (family.members.has(b.deviceId)) return json(res, 409, { error: 'Device already joined' });
       family.members.set(b.deviceId, { publicKey: b.devicePublicKey });
+      family.ready.clear();
       invite.uses++;
       return json(res, 200, { familyId: family.familyId, members: publicMembers(family) });
     }
@@ -164,6 +166,7 @@ http.createServer(async (req, res) => {
       family.keyPackages.clear();
       family.latest.clear();
       family.keyEpoch++;
+      family.ready.clear();
       family.rotationRequired = true;
       return json(res, 200, { keyEpoch: family.keyEpoch, rotationRequired: true });
     }
