@@ -12,7 +12,8 @@
     "doctor": "npx expo-doctor",
     "relay:dev": "node scripts/dev-relay.mjs",
     "ios": "expo run:ios",
-    "android:preview": "expo export --platform android && cd android && gradlew.bat app:assembleRelease"
+    "android:preview": "expo export --platform android && cd android && gradlew.bat app:assembleRelease",
+    "test:relay": "node --test tests/relay.test.mjs"
   },
   "dependencies": {
     "expo": "~54.0.0",
