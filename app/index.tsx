@@ -61,7 +61,7 @@ export default function HomeScreen() {
     setKeyStatus('Synchronizing');
     try {
       const ready = await provisionFamilyKey(relay, familyId, owner);
-      setKeyStatus(ready ? 'Ready' : 'Waiting for owner');
+      setKeyStatus(ready ? 'Ready' : owner ? 'Waiting for members' : 'Waiting for owner');
     } catch (error) {
       setKeyStatus('Failed');
       Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
@@ -91,7 +91,7 @@ export default function HomeScreen() {
       if (loaded.familyId && relay) {
         setKeyStatus('Synchronizing');
         provisionFamilyKey(relay, loaded.familyId, loaded.role === 'owner')
-          .then((ready) => { if (mounted) setKeyStatus(ready ? 'Ready' : 'Waiting for owner'); })
+          .then((ready) => { if (mounted) setKeyStatus(ready ? 'Ready' : loaded.role === 'owner' ? 'Waiting for members' : 'Waiting for owner'); })
           .catch(() => { if (mounted) setKeyStatus('Retry required'); });
       }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
@@ -106,7 +106,7 @@ export default function HomeScreen() {
       try {
         const ready = await provisionFamilyKey(relay, current.familyId, current.role === 'owner');
         if (mounted && familyRef.current.familyId === current.familyId) {
-          setKeyStatus(ready ? 'Ready' : 'Connecting');
+          setKeyStatus(ready ? 'Ready' : current.role === 'owner' ? 'Waiting for members' : 'Connecting');
         }
       } catch {
         if (mounted && familyRef.current.familyId === current.familyId) setKeyStatus('Retrying');
