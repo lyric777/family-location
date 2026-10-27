@@ -59,11 +59,37 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   assert.equal((await request(base, '/v1/families/join', 'POST', { inviteCode, deviceId: member.deviceId, devicePublicKey: member.publicKey })).status, 200);
   assert.equal((await request(base, '/v1/families/join', 'POST', { inviteCode, deviceId: stranger.deviceId, devicePublicKey: stranger.publicKey })).status, 404);
 
+  // A signature is bound to method, path and exact request body.
+  const challenge = await request(base, '/v1/auth/challenge', 'POST', {
+    deviceId: owner.deviceId, familyId, action: 'key-ready',
+  });
+  assert.equal(challenge.status, 200);
+  const original = JSON.stringify({ epoch: 1, confirmation: randomBytes(32).toString('base64') });
+  const signed = JSON.stringify(['key-ready', familyId, challenge.data.nonce, 'POST', path('key-ready'),
+    createHash('sha256').update(original).digest('hex')]);
+  const headers = {
+    'x-device-id': owner.deviceId,
+    'x-auth-nonce': challenge.data.nonce,
+    'x-auth-signature': sign('sha256', Buffer.from(signed), owner.privateKey).toString('base64'),
+  };
+  const tampered = { epoch: 1, confirmation: randomBytes(32).toString('base64') };
+  assert.equal((await request(base, path('key-ready'), 'POST', tampered, headers)).status, 403);
+  // The failed authentication consumes the challenge, preventing replay.
+  assert.equal((await request(base, path('key-ready'), 'POST', JSON.parse(original), headers)).status, 403);
+  assert.equal((await authorized(base, member, familyId, 'key-ready', path('key-ready'), 'POST',
+    { epoch: 1, confirmation: 'invalid' })).status, 400);
+
   const confirm = randomBytes(32).toString('base64');
   assert.equal((await authorized(base, owner, familyId, 'key-ready', path('key-ready'), 'POST', { epoch: 1, confirmation: confirm })).status, 200);
   assert.equal((await authorized(base, owner, familyId, 'key-status', path('key-status'))).data.allReady, false);
   assert.equal((await authorized(base, member, familyId, 'key-ready', path('key-ready'), 'POST', { epoch: 1, confirmation: confirm })).status, 200);
   assert.equal((await authorized(base, member, familyId, 'key-status', path('key-status'))).data.allReady, true);
+  const mismatch = randomBytes(32).toString('base64');
+  assert.equal((await authorized(base, member, familyId, 'key-ready', path('key-ready'), 'POST',
+    { epoch: 1, confirmation: mismatch })).status, 200);
+  assert.equal((await authorized(base, owner, familyId, 'key-status', path('key-status'))).data.allReady, false);
+  assert.equal((await authorized(base, member, familyId, 'key-ready', path('key-ready'), 'POST',
+    { epoch: 1, confirmation: confirm })).status, 200);
 
   assert.equal((await authorized(base, member, familyId, 'revoke', path('revoke'), 'POST', { deviceId: owner.deviceId })).status, 403);
   const revoked = await authorized(base, owner, familyId, 'revoke', path('revoke'), 'POST', { deviceId: member.deviceId });
