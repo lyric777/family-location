@@ -49,6 +49,8 @@ export default function HomeScreen() {
   const [family, setFamily] = useState<LocalFamilyState>(() => getOrCreateLocalFamilyState());
   const [inviteInput, setInviteInput] = useState('');
   const [pairingBusy, setPairingBusy] = useState(false);
+  const [pairingStep, setPairingStep] = useState('');
+  const [pairingError, setPairingError] = useState('');
   const [identityReady, setIdentityReady] = useState(false);
   const [keyStatus, setKeyStatus] = useState('Not checked');
   const relay = getConfiguredRelay();
@@ -174,6 +176,8 @@ export default function HomeScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Family pairing · 2.3</Text>
           <Text style={styles.hint}>Relay: {relay ? 'CONFIGURED' : 'NOT CONFIGURED'}</Text>
+          {pairingStep ? <Text style={styles.meta}>Pairing step: {pairingStep}</Text> : null}
+          {pairingError ? <Text selectable style={styles.hint}>Pairing error: {pairingError}</Text> : null}
           <Text style={styles.meta}>Device: {family.device.displayName}</Text>
           <Text style={styles.hint}>{family.device.deviceId}</Text>
           {family.familyId ? (
@@ -270,13 +274,21 @@ export default function HomeScreen() {
                 onPress={async () => {
                   if (!relay) return;
                   setPairingBusy(true);
+                  setPairingError('');
+                  setPairingStep('Connecting to relay');
                   try {
                     const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
+                    setPairingStep('Saving family');
                     setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId)));
                     await persistFamilyState();
+                    setPairingStep('Initializing key');
                     await syncFamilyKey(result.familyId, true);
+                    setPairingStep('');
                   } catch (error) {
-                    Alert.alert('Cannot create family', error instanceof Error ? error.message : 'Relay error');
+                    const message = error instanceof Error ? error.message : String(error);
+                    setPairingError(message);
+                    setPairingStep('Failed');
+                    Alert.alert('Cannot create family', message);
                   } finally {
                     setPairingBusy(false);
                   }
