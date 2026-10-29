@@ -9,13 +9,29 @@ export class HttpFamilyRelay {
   constructor(private readonly baseUrl: string) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(this.baseUrl + path, {
-      ...init,
-      headers: { 'content-type': 'application/json', ...(init?.headers || {}) },
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || 'Relay request failed');
-    return body as T;
+    const url = this.baseUrl + path;
+    const method = init?.method ?? 'GET';
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      console.info('[FamilyRelay] request', method, url);
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json', ...(init?.headers || {}) },
+      });
+      const body = await response.json();
+      console.info('[FamilyRelay] response', method, url, response.status, Date.now() - startedAt, 'ms');
+      if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + (body.error || 'Relay request failed'));
+      return body as T;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn('[FamilyRelay] failure', method, url, Date.now() - startedAt, 'ms', reason);
+      throw new Error(method + ' ' + url + ': ' + reason);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   createFamily(request: CreateFamilyRequest) {
