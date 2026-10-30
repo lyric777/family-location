@@ -193,8 +193,8 @@ export default function HomeScreen() {
               </Pressable>
               <Text style={styles.meta}>Members: {family.memberDeviceIds.length}</Text>
               {family.memberDeviceIds.map((id) => (
-                <View key={id} style={styles.row}>
-                  <Text style={styles.hint}>{id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>
+                <View key={id} style={styles.memberRow}>
+                  <Text style={styles.memberId}>{id}{id === family.device.deviceId ? ' (this phone)' : ''}</Text>
                   {family.role === 'owner' && id !== family.device.deviceId ? (
                     <Pressable disabled={pairingBusy} onPress={() => {
                       if (!relay || !family.familyId) return;
@@ -216,7 +216,7 @@ export default function HomeScreen() {
                           }
                         } },
                       ]);
-                    }}>
+                    }} style={styles.removeMemberButton}>
                       <Text style={styles.secondaryButtonText}>Remove</Text>
                     </Pressable>
                   ) : null}
@@ -439,6 +439,9 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 17, lineHeight: 25, opacity: 0.65 },
   card: { marginTop: 12, padding: 20, borderRadius: 18, backgroundColor: '#fff', gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  memberId: { flex: 1, flexShrink: 1, minWidth: 0, fontSize: 11, lineHeight: 16, opacity: 0.45 },
+  removeMemberButton: { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: '#eeeeea' },
   cardTitle: { fontSize: 18, fontWeight: '700' },
   running: { fontSize: 12, fontWeight: '800' },
   stopped: { fontSize: 12, fontWeight: '800', opacity: 0.4 },
