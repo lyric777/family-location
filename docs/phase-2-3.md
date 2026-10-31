@@ -1,6 +1,6 @@
 # Phase 2.3 - Secure family location synchronization
 
-Updated: 2026-10-25. This document is the current Phase 2.3 handoff and acceptance specification. Implementation claims below are based on repository inspection and prior acceptance reports, not a fresh Android build.
+Updated: 2026-10-31. This document captures Phase 2.3 requirements and the original acceptance plan. For the **latest observed device results, current blocking issue, precise next steps, and environment setup**, read [Project handoff — 2026-10-31](project-handoff-2026-10-31.md). The handoff supersedes the older status table below where they differ; no full 2.3.2 acceptance has been granted.
 
 ## Confirmed product decisions
 
@@ -25,14 +25,14 @@ OPPO physical Android phone created a family, emulator joined via the LAN relay,
 | Signed challenge authentication, public key identity checks, signed request method/path/body | Code committed; protocol tests pending |
 | AES-GCM family content key and Keystore wrapping | Code committed; Android validation pending |
 | ECDH exchange public key binding and encrypted key packages | Code committed; end-to-end tests pending |
-| Family key epochs, revocation, owner rotation, leave/dissolve | Code committed; integration tests pending |
-| Auto provisioning after create/join/restore | Code committed; integration tests pending |
+| Family key epochs, revocation, owner rotation, leave/dissolve | Member leave observed working; Owner revoke partially passed, but removed Member remains in Retrying; epoch proof and dissolve tests outstanding |
+| Auto provisioning after create/join/restore | Create/join and visual reopen/restore observed working on two devices |
 | Active-screen retry every 15 seconds | Code committed; not background execution |
 | Owner Remove, Member Leave, Owner Dissolve UI | Code committed; Android validation pending |
-| Both-sides Ready handshake / confirmation | Initial signed member confirmation and shared-key check committed; untested on devices |
+| Both-sides Ready handshake / confirmation | Observed Ready on physical Android + emulator after automatic pairing; negative/security coverage incomplete |
 | Native background receipt of rotated keys | Not implemented; Phase 2.3.3 |
 | Native background encrypted location upload and peer display | Not implemented; Phase 2.3.3 |
-| TypeScript / Kotlin build and security test suite | Not yet completed |
+| TypeScript / Kotlin build and security test suite | Relay and TypeScript CI passed; Kotlin Debug compile passed locally; further integration/security tests needed |
 
 ## Outstanding engineering concerns
 
@@ -47,7 +47,7 @@ OPPO physical Android phone created a family, emulator joined via the LAN relay,
 
 ## Next steps and acceptance gate
 
-1. Validate the new both-sides Ready confirmation with OPPO and emulator, fix pending pairing states, and harden key-rotation recovery.
+1. Fix revoked Member remaining in Retrying, add explicit safe membership-status handling, and test revoked-device cleanup. See [handoff](project-handoff-2026-10-31.md).
 2. Run TypeScript checks, Kotlin/Gradle compilation, and relay protocol tests.
 3. Verify OPPO + emulator: initial pairing, restart identity persistence, same-key proof, leave/revoke/dissolve, epoch rotation, unauthorized access denial.
 4. Phase 2.3.3: native encrypted background location upload, peer-location read/decrypt, and native receipt of rotated keys.
