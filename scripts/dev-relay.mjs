@@ -5,6 +5,7 @@ const port = Number(process.env.PORT || 8787);
 const families = new Map();
 const invites = new Map();
 const challenges = new Map();
+const revokedMemberships = new Map();
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const code = () => Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join('');
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
@@ -48,6 +49,7 @@ http.createServer(async (req, res) => {
       const family = families.get(invite.familyId);
       if (family.members.has(b.deviceId)) return json(res, 409, { error: 'Device already joined' });
       family.members.set(b.deviceId, { publicKey: b.devicePublicKey });
+      revokedMemberships.delete(family.familyId + ':' + b.deviceId);
       family.ready.clear();
       invite.uses++;
       return json(res, 200, { familyId: family.familyId, members: publicMembers(family) });
@@ -55,6 +57,9 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
+      if (revokedMemberships.has(String(b.familyId) + ':' + String(b.deviceId))) {
+        return json(res, 403, { code: 'MEMBERSHIP_REVOKED', error: 'Membership revoked' });
+      }
       if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete', 'key-ready', 'key-status'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
@@ -151,6 +156,7 @@ http.createServer(async (req, res) => {
       const departing = req.headers['x-device-id'];
       if (departing === family.ownerDeviceId) return json(res, 403, { error: 'Owner must dissolve family' });
       if (!family.members.delete(departing)) return json(res, 403, { error: 'Not a member' });
+      revokedMemberships.set(family.familyId + ':' + departing, true);
       family.keyPackages.clear();
       family.latest.clear();
       family.keyEpoch++;
@@ -163,6 +169,7 @@ http.createServer(async (req, res) => {
       const b = JSON.parse(bodyText);
       if (!family.members.has(b.deviceId) || b.deviceId === family.ownerDeviceId) return json(res, 400, { error: 'Invalid member' });
       family.members.delete(b.deviceId);
+      revokedMemberships.set(family.familyId + ':' + b.deviceId, true);
       family.keyPackages.clear();
       family.latest.clear();
       family.keyEpoch++;
