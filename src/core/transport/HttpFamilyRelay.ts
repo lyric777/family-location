@@ -5,6 +5,18 @@ import type { CreateFamilyRequest, CreateFamilyResponse, JoinFamilyRequest, Join
 export type RelayMember = { deviceId: string; publicKey: string };
 export type RelayFamily = { familyId: string; members: RelayMember[] };
 
+export class RelayHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    readonly requestPath: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RelayHttpError';
+  }
+}
+
 export class HttpFamilyRelay {
   constructor(private readonly baseUrl: string) {}
 
@@ -23,11 +35,17 @@ export class HttpFamilyRelay {
       });
       const body = await response.json();
       console.info('[FamilyRelay] response', method, url, response.status, Date.now() - startedAt, 'ms');
-      if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + (body.error || 'Relay request failed'));
+      if (!response.ok) throw new RelayHttpError(
+        response.status,
+        typeof body.code === 'string' ? body.code : null,
+        path,
+        typeof body.error === 'string' ? body.error : 'Relay request failed',
+      );
       return body as T;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       console.warn('[FamilyRelay] failure', method, url, Date.now() - startedAt, 'ms', reason);
+      if (error instanceof RelayHttpError) throw error;
       throw new Error(method + ' ' + url + ': ' + reason);
     } finally {
       clearTimeout(timeout);
