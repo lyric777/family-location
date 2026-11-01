@@ -13,6 +13,14 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - Ordinary location collection, encryption, upload, and background operation must work while the screen is locked and React UI is absent. Explicit stop / recent-app swipe should stop sharing as agreed during Phase 1 testing.
 - Relay must not see plaintext coordinates or raw family content keys. The LAN HTTP relay is development-only and must not be exposed to the public internet.
 
+## 2026-11-01 progress update
+
+- Client now retains structured HTTP errors via `RelayHttpError` (`4d38681`).
+- Development Relay now distinguishes revoked membership during challenge requests (`3b70998`).
+- Client UI still retries after removal; no new device acceptance has been completed.
+- Regression tests and a verifiable revocation-state protocol are still pending. Relay state is in memory, so a status code alone must not trigger local key deletion.
+- Next: add tests, establish safe status verification, implement UI cleanup, then retest removal and dissolution.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
