@@ -1,11 +1,21 @@
 # Project handoff — Family Location
 
-**Updated:** 2026-10-31  
+**Updated:** 2026-11-01  
 **Repository:** `lyric777/family-location`  
 **Current milestone:** Phase **2.3.2** — secure pairing, membership, and family key lifecycle. **Not fully accepted.**  
 **Read first:** this handoff, then [phase-2-3.md](phase-2-3.md), then the actual code. The README is the high-level product roadmap and should not be rewritten to track daily progress.
 
 This file is intentionally project-only: no account details, personal names, device identifiers, invitation codes, real location coordinates, or private LAN addresses. It records both observed results and unverified implementation separately.
+
+## Latest progress (2026-11-01)
+
+Two commits have been added since this handoff was first written: `4d38681` preserves structured HTTP errors in the client, and `3b70998` adds an in-memory revoked-membership marker to the development Relay. The Relay returns `MEMBERSHIP_REVOKED` for removed devices requesting a challenge.
+
+**This is not a completed fix.** The UI still displays `Retrying` after removal. No new device test or confirmed CI result covers these changes, and the attempted regression-test edit did not commit. The revocation marker is not independently verified and the development Relay loses it on restart; do not delete local keys solely on that response.
+
+Next: test revoked and ordinary authentication errors, define a verifiable status and restart strategy, implement safe UI recovery, then retest Owner removal, key epochs, and dissolution on two devices. Phase 2.3.2 remains pending acceptance.
+
+---
 
 ## 1. Product scope and confirmed decisions
 
