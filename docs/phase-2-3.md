@@ -21,6 +21,13 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - Regression tests and a verifiable revocation-state protocol are still pending. Relay state is in memory, so a status code alone must not trigger local key deletion.
 - Next: add tests, establish safe status verification, implement UI cleanup, then retest removal and dissolution.
 
+## 2026-11-02 progress
+
+- `6b638e1`: foreground key-sync UI now distinguishes a Relay `MEMBERSHIP_REVOKED` error from transient retry failures, displaying `Access revoked - verification required`.
+- This is a non-destructive interim diagnostic: it does not automatically delete family keys or membership. The marker is not independently verified, and no new device acceptance or CI result has been confirmed.
+- Regression test submission was blocked; add tests for revoked/unknown devices and temporary failures before relying on the status.
+- Next: define trustworthy revocation/dissolution confirmation, handle state transitions safely, validate on both devices, and finish 2.3.2 acceptance.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
