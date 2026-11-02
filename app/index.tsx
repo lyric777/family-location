@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
 import { applyCreatedFamily, applyJoinedFamily, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
-import { getConfiguredRelay } from '../src/core/transport/HttpFamilyRelay';
+import { getConfiguredRelay, RelayHttpError } from '../src/core/transport/HttpFamilyRelay';
 import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
@@ -110,8 +110,11 @@ export default function HomeScreen() {
         if (mounted && familyRef.current.familyId === current.familyId) {
           setKeyStatus(ready ? 'Ready' : current.role === 'owner' ? 'Waiting for members' : 'Connecting');
         }
-      } catch {
-        if (mounted && familyRef.current.familyId === current.familyId) setKeyStatus('Retrying');
+      } catch (error) {
+        if (mounted && familyRef.current.familyId === current.familyId) {
+          setKeyStatus(error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED'
+            ? 'Access revoked - verification required' : 'Retrying');
+        }
       } finally {
         syncInFlight.current = false;
       }
