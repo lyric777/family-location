@@ -56,6 +56,7 @@ export default function HomeScreen() {
   const relay = getConfiguredRelay();
   const familyRef = useRef(family);
   const syncInFlight = useRef(false);
+  const revokedFamilyRef = useRef<string | null>(null);
   familyRef.current = family;
 
   const syncFamilyKey = async (familyId: string, owner: boolean) => {
@@ -65,7 +66,9 @@ export default function HomeScreen() {
       const ready = await provisionFamilyKey(relay, familyId, owner);
       setKeyStatus(ready ? 'Ready' : owner ? 'Waiting for members' : 'Waiting for owner');
     } catch (error) {
-      setKeyStatus('Failed');
+      setKeyStatus(error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED'
+        ? 'Access revoked - verification required' : 'Failed');
+      if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') revokedFamilyRef.current = familyId;
       Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
     }
   };
@@ -94,7 +97,13 @@ export default function HomeScreen() {
         setKeyStatus('Synchronizing');
         provisionFamilyKey(relay, loaded.familyId, loaded.role === 'owner')
           .then((ready) => { if (mounted) setKeyStatus(ready ? 'Ready' : loaded.role === 'owner' ? 'Waiting for members' : 'Waiting for owner'); })
-          .catch(() => { if (mounted) setKeyStatus('Retry required'); });
+          .catch((error) => {
+            if (!mounted) return;
+            if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') {
+              revokedFamilyRef.current = loaded.familyId;
+              setKeyStatus('Access revoked - verification required');
+            } else setKeyStatus('Retry required');
+          });
       }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
     initialize();
@@ -103,7 +112,7 @@ export default function HomeScreen() {
     // and recover after revocation/rotation. Never run overlapping exchanges.
     const keyTimer = setInterval(async () => {
       const current = familyRef.current;
-      if (AppState.currentState !== 'active' || !relay || !current.familyId || syncInFlight.current) return;
+      if (AppState.currentState !== 'active' || !relay || !current.familyId || syncInFlight.current || revokedFamilyRef.current === current.familyId) return;
       syncInFlight.current = true;
       try {
         const ready = await provisionFamilyKey(relay, current.familyId, current.role === 'owner');
@@ -112,8 +121,10 @@ export default function HomeScreen() {
         }
       } catch (error) {
         if (mounted && familyRef.current.familyId === current.familyId) {
-          setKeyStatus(error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED'
-            ? 'Access revoked - verification required' : 'Retrying');
+          if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') {
+            revokedFamilyRef.current = current.familyId;
+            setKeyStatus('Access revoked - verification required');
+          } else setKeyStatus('Retrying');
         }
       } finally {
         syncInFlight.current = false;
