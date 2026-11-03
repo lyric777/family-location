@@ -28,6 +28,13 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - Regression test submission was blocked; add tests for revoked/unknown devices and temporary failures before relying on the status.
 - Next: define trustworthy revocation/dissolution confirmation, handle state transitions safely, validate on both devices, and finish 2.3.2 acceptance.
 
+## 2026-11-03 progress
+
+- `1bd87b2`: once the client receives `MEMBERSHIP_REVOKED`, the foreground key-provisioning retry loop stops for that family and displays `Access revoked - verification required`. This is deliberately **non-destructive**; it does not clear keys or membership.
+- `66ea427`: new Relay regression test checks that a revoked member receives the distinct error while an unknown device does not.
+- `3e391f3`: CI's `test:relay` command includes both Relay test files.
+- No new CI run or physical-device acceptance has been confirmed for these commits. The revocation marker remains an in-memory, unverified development signal. Next: validate tests, design authenticated membership status and safe local cleanup, then repeat two-device acceptance.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
