@@ -35,6 +35,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - `3e391f3`: CI's `test:relay` command includes both Relay test files.
 - No new CI run or physical-device acceptance has been confirmed for these commits. The revocation marker remains an in-memory, unverified development signal. Next: validate tests, design authenticated membership status and safe local cleanup, then repeat two-device acceptance.
 
+## 2026-11-04 progress
+
+- `4c39ec2` extends the Relay regression test to distinguish an unknown device from a revoked member and to check revoked access to the key-read endpoint.
+- A plain HTTP `MEMBERSHIP_REVOKED` marker is **not** a trustworthy authorization to erase local keys. Do not implement automatic destructive cleanup until the client can verify an Owner-authorized, family-bound revocation statement and distinguish missing server state after restart.
+- Recommended protocol: on Owner removal, produce an Owner-signed statement binding family ID, removed device ID, key epoch and action. Relay stores and returns the statement; Member verifies it against a previously pinned Owner identity key. Persist status or define explicit recovery semantics before relying on it across Relay restarts. A signed statement must be replay-resistant and tied to a monotonically increasing epoch.
+- The current local family store contains member IDs but does not pin the Owner public signing key; this is a prerequisite for verifying Owner-signed removal. Key rotation and local cleanup must be tested as separate steps.
+- Next: pin the Owner identity key during authenticated pairing, implement and test signed revocation evidence, then safely stop family sharing and clear family-specific state. Do not delete the device identity key.
+- New CI and device results are not yet confirmed for this update. Phase 2.3.2 remains open.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
