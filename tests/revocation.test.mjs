@@ -53,10 +53,12 @@ test('revoked member has a distinct challenge error', async t => {
   const revokePath = '/v1/families/' + encodeURIComponent(familyId) + '/revoke';
   const before = await signed(base, unknown, familyId, 'members', membersPath);
   assert.equal(before.status, 403);
+  assert.equal(before.data.error, 'Not a family member');
   assert.notEqual(before.data.code, 'MEMBERSHIP_REVOKED');
   assert.equal((await signed(base, owner, familyId, 'revoke', revokePath, 'POST', { deviceId: member.deviceId })).status, 200);
   const after = await signed(base, member, familyId, 'members', membersPath);
   assert.equal(after.status, 403);
   assert.equal(after.data.code, 'MEMBERSHIP_REVOKED');
+  assert.equal((await signed(base, member, familyId, 'key-read', '/v1/families/' + encodeURIComponent(familyId) + '/key-read')).status, 403);
   assert.equal((await signed(base, owner, familyId, 'members', membersPath)).status, 200);
 });
