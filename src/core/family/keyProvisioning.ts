@@ -1,5 +1,6 @@
 import FamilyLocation from '../../../modules/family-location';
 import type { HttpFamilyRelay } from '../transport/HttpFamilyRelay';
+import { getOrCreateLocalFamilyState, persistFamilyState, pinFamilyOwner } from './localFamilyStore';
 
 type ExchangeMember = {
   deviceId: string;
@@ -42,6 +43,15 @@ export async function provisionFamilyKey(relay: HttpFamilyRelay, familyId: strin
   const identity = await FamilyLocation.getDeviceIdentity();
   const exchange = await relay.getKeyExchange(familyId);
   const members = await verifiedMembers(familyId, exchange.members);
+  const ownerIdentity = members.get(exchange.ownerDeviceId);
+  if (!ownerIdentity) throw new Error('Owner identity not registered');
+  const local = getOrCreateLocalFamilyState();
+  if (local.familyId !== familyId) throw new Error('Family changed during provisioning');
+  if (local.ownerDeviceId !== exchange.ownerDeviceId ||
+      local.ownerPublicKey !== ownerIdentity.identityPublicKey) {
+    pinFamilyOwner(familyId, exchange.ownerDeviceId, ownerIdentity.identityPublicKey);
+    await persistFamilyState();
+  }
   if (owner) {
     if (exchange.ownerDeviceId !== identity.deviceId) throw new Error('Not family owner');
     if (exchange.rotationRequired) {
