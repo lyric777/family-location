@@ -44,6 +44,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - Next: pin the Owner identity key during authenticated pairing, implement and test signed revocation evidence, then safely stop family sharing and clear family-specific state. Do not delete the device identity key.
 - New CI and device results are not yet confirmed for this update. Phase 2.3.2 remains open.
 
+## 2026-11-05 progress
+
+- `7ee5002`: local family membership now persists `ownerDeviceId` and `ownerPublicKey`, clears both on leaving/reset, and refuses to replace a previously pinned owner identity with a different value.
+- `d187e72`: after verifying the registered exchange-key binding, provisioning records the Owner signing identity and persists it before proceeding with family key exchange. Missing Owner identity or a changed pinned key causes provisioning to fail.
+- **Trust boundary:** first-use pinning currently relies on the development Relay's exchange response. Signature verification proves possession of the presented key, not that the presented key belongs to the intended human Owner. A secure QR/in-person fingerprint check or authenticated invitation binding is needed before treating this as a fully trusted anchor.
+- **Migration:** existing memberships lack the new fields; they will be pinned on the next successful provisioning. This is not an independently authenticated migration.
+- No Owner-signed revocation statement, automatic local key cleanup, or two-device acceptance has been completed yet. The latest TypeScript/CI result must be checked.
+- Next: design and test Owner-signed, family/recipient/epoch-bound revocation evidence with replay protection; only after verification implement safe local cleanup and removal UX.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
