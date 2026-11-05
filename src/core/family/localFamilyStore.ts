@@ -7,6 +7,8 @@ export type LocalFamilyState = {
   inviteCode: string | null;
   role: 'owner' | 'member' | null;
   memberDeviceIds: string[];
+  ownerDeviceId: string | null;
+  ownerPublicKey: string | null;
 };
 
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -18,7 +20,7 @@ export async function initializeFamilyState() {
   const identity = await FamilyLocation.getDeviceIdentity();
   const current = getOrCreateLocalFamilyState();
   const raw = await FamilyLocation.getFamilyMembership();
-  let membership: Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds'> | null = null;
+  let membership: Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'> | null = null;
   if (raw) {
     try { membership = JSON.parse(raw); } catch { membership = null; }
   }
@@ -26,6 +28,8 @@ export async function initializeFamilyState() {
     ...current,
     device: { deviceId: identity.deviceId, displayName: identity.displayName, createdAtMs: current.device.createdAtMs },
     ...(membership ?? { familyId: null, inviteCode: null, role: null, memberDeviceIds: [] }),
+    ownerDeviceId: membership?.ownerDeviceId ?? null,
+    ownerPublicKey: membership?.ownerPublicKey ?? null,
   };
   return state;
 }
@@ -35,6 +39,7 @@ export async function persistFamilyState() {
   await FamilyLocation.saveFamilyMembership(JSON.stringify({
     familyId: current.familyId, inviteCode: current.inviteCode,
     role: current.role, memberDeviceIds: current.memberDeviceIds,
+    ownerDeviceId: current.ownerDeviceId, ownerPublicKey: current.ownerPublicKey,
   }));
 }
 
@@ -44,19 +49,19 @@ export async function clearPersistedFamily() {
 }
 
 export function getOrCreateLocalFamilyState(): LocalFamilyState {
-  if (!state) state = { device: { deviceId: makeId('dev'), displayName: 'This phone', createdAtMs: Date.now() }, familyId: null, inviteCode: null, role: null, memberDeviceIds: [] };
+  if (!state) state = { device: { deviceId: makeId('dev'), displayName: 'This phone', createdAtMs: Date.now() }, familyId: null, inviteCode: null, role: null, memberDeviceIds: [], ownerDeviceId: null, ownerPublicKey: null };
   return state;
 }
 
 export function applyCreatedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[]) {
   const current = getOrCreateLocalFamilyState();
-  state = { ...current, familyId, inviteCode, role: 'owner', memberDeviceIds };
+  state = { ...current, familyId, inviteCode, role: 'owner', memberDeviceIds, ownerDeviceId: null, ownerPublicKey: null };
   return state;
 }
 
 export function applyJoinedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[]) {
   const current = getOrCreateLocalFamilyState();
-  state = { ...current, familyId, inviteCode: inviteCode.toUpperCase(), role: 'member', memberDeviceIds };
+  state = { ...current, familyId, inviteCode: inviteCode.toUpperCase(), role: 'member', memberDeviceIds, ownerDeviceId: null, ownerPublicKey: null };
   return state;
 }
 
@@ -66,8 +71,19 @@ export function updateMembers(memberDeviceIds: string[]) {
   return state;
 }
 
+export function pinFamilyOwner(familyId: string, deviceId: string, publicKey: string) {
+  const current = getOrCreateLocalFamilyState();
+  if (current.familyId !== familyId) throw new Error('Family changed during owner verification');
+  if ((current.ownerDeviceId && current.ownerDeviceId !== deviceId) ||
+      (current.ownerPublicKey && current.ownerPublicKey !== publicKey)) {
+    throw new Error('Pinned family owner identity mismatch');
+  }
+  state = { ...current, ownerDeviceId: deviceId, ownerPublicKey: publicKey };
+  return state;
+}
+
 export function resetLocalFamily() {
   const current = getOrCreateLocalFamilyState();
-  state = { ...current, familyId: null, inviteCode: null, role: null, memberDeviceIds: [] };
+  state = { ...current, familyId: null, inviteCode: null, role: null, memberDeviceIds: [], ownerDeviceId: null, ownerPublicKey: null };
   return state;
 }
