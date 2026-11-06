@@ -53,6 +53,13 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - No Owner-signed revocation statement, automatic local key cleanup, or two-device acceptance has been completed yet. The latest TypeScript/CI result must be checked.
 - Next: design and test Owner-signed, family/recipient/epoch-bound revocation evidence with replay protection; only after verification implement safe local cleanup and removal UX.
 
+## 2026-11-06 progress
+
+- `d262b45`: added `src/core/family/ownerRevocation.ts` with a canonical, versioned Owner revocation statement and verification helper. The verifier checks family, Owner and target member IDs, increasing key epoch, Owner public-key fingerprint, and the Owner's signature.
+- This is a **foundation only**: no Relay transport/storage for the signed statement, no Owner UI signing integration, no Member automatic cleanup, and no device acceptance yet. Do not present it as a complete revocation protocol.
+- The pinned Owner key still uses first-use trust via the development Relay. A QR/fingerprint confirmation or authenticated invitation binding remains necessary for stronger identity assurance.
+- Next: define durable statement delivery, add positive/negative signature tests, integrate Owner signing and Member verification, and handle recovery after Relay restart. Only then allow verified cleanup. Run CI before device acceptance.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
