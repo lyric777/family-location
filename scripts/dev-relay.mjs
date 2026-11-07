@@ -168,8 +168,28 @@ http.createServer(async (req, res) => {
       if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Owner required' });
       const b = JSON.parse(bodyText);
       if (!family.members.has(b.deviceId) || b.deviceId === family.ownerDeviceId) return json(res, 400, { error: 'Invalid member' });
+      const statement = b.statement;
+      if (!statement || statement.version !== 1 || statement.action !== 'revoke' ||
+          statement.familyId !== family.familyId ||
+          statement.ownerDeviceId !== family.ownerDeviceId ||
+          statement.memberDeviceId !== b.deviceId ||
+          statement.keyEpoch !== family.keyEpoch + 1 ||
+          typeof b.signature !== 'string') {
+        return json(res, 400, { error: 'Invalid revocation statement' });
+      }
+      const statementMessage = JSON.stringify([
+        'family-revocation-v1', statement.familyId, statement.ownerDeviceId,
+        statement.memberDeviceId, statement.keyEpoch,
+      ]);
+      let validStatement = false;
+      try {
+        validStatement = verify('sha256', Buffer.from(statementMessage),
+          createPublicKey({ key: Buffer.from(family.members.get(family.ownerDeviceId).publicKey, 'base64'),
+            format: 'der', type: 'spki' }), Buffer.from(b.signature, 'base64'));
+      } catch {}
+      if (!validStatement) return json(res, 403, { error: 'Invalid owner revocation signature' });
       family.members.delete(b.deviceId);
-      revokedMemberships.set(family.familyId + ':' + b.deviceId, true);
+      revokedMemberships.set(family.familyId + ':' + b.deviceId, { statement, signature: b.signature });
       family.keyPackages.clear();
       family.latest.clear();
       family.keyEpoch++;
