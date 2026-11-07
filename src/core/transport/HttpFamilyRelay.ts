@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import FamilyLocation from '../../../modules/family-location';
 import type { CreateFamilyRequest, CreateFamilyResponse, JoinFamilyRequest, JoinFamilyResponse } from '../family/protocol';
+import type { OwnerRevocationStatement } from '../family/ownerRevocation';
 
 export type RelayMember = { deviceId: string; publicKey: string };
 export type RelayFamily = { familyId: string; members: RelayMember[] };
@@ -122,9 +123,9 @@ export class HttpFamilyRelay {
     );
   }
 
-  revokeMember(familyId: string, deviceId: string) {
+  revokeMember(familyId: string, deviceId: string, statement: OwnerRevocationStatement, signature: string) {
     return this.authorized<{ keyEpoch: number; rotationRequired: boolean }>(familyId, 'revoke', '/v1/families/' + encodeURIComponent(familyId) + '/revoke', {
-      method: 'POST', body: JSON.stringify({ deviceId }),
+      method: 'POST', body: JSON.stringify({ deviceId, statement, signature }),
     });
   }
 
