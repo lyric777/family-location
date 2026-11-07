@@ -60,6 +60,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - The pinned Owner key still uses first-use trust via the development Relay. A QR/fingerprint confirmation or authenticated invitation binding remains necessary for stronger identity assurance.
 - Next: define durable statement delivery, add positive/negative signature tests, integrate Owner signing and Member verification, and handle recovery after Relay restart. Only then allow verified cleanup. Run CI before device acceptance.
 
+## 2026-11-07 progress
+
+- `cb06208`: Relay client now sends an Owner-signed revocation statement with the revoke request.
+- `96fccc1`: Owner removal UI signs a versioned statement binding family ID, Owner ID, removed member ID, and the next key epoch.
+- `a84f975`: Relay checks the statement fields, expected epoch, and Owner signature **before** removing the member; it retains the signed statement in its in-memory revoked-membership record.
+- `4b2411f`, `3d73942`: existing Relay tests updated to submit signed revocations.
+- **Not yet complete:** Relay does not return the signed statement to the removed Member; Member-side signature verification and automatic cleanup are not wired. In-memory state is still lost on Relay restart. The Owner public key is pinned on first use, without out-of-band identity confirmation. New CI results and device acceptance are pending.
+- Next: add tampered signature/epoch/target tests, deliver signed evidence to Member, verify against pinned Owner key and local epoch, and only then implement safe family-specific cleanup. Keep 2.3.2 open.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
