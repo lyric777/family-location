@@ -92,7 +92,12 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
     { epoch: 1, confirmation: confirm })).status, 200);
 
   assert.equal((await authorized(base, member, familyId, 'revoke', path('revoke'), 'POST', { deviceId: owner.deviceId })).status, 403);
-  const revoked = await authorized(base, owner, familyId, 'revoke', path('revoke'), 'POST', { deviceId: member.deviceId });
+  const statement = { version: 1, action: 'revoke', familyId, ownerDeviceId: owner.deviceId, memberDeviceId: member.deviceId, keyEpoch: 2 };
+  const signature = sign('sha256', Buffer.from(JSON.stringify([
+    'family-revocation-v1', familyId, owner.deviceId, member.deviceId, 2,
+  ])), owner.privateKey).toString('base64');
+  const revoked = await authorized(base, owner, familyId, 'revoke', path('revoke'), 'POST',
+    { deviceId: member.deviceId, statement, signature });
   assert.equal(revoked.status, 200);
   assert.equal(revoked.data.keyEpoch, 2);
   assert.equal((await authorized(base, member, familyId, 'members', path('members'))).status, 403);
