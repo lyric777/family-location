@@ -17,6 +17,7 @@ import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '
 import { applyCreatedFamily, applyJoinedFamily, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay, RelayHttpError } from '../src/core/transport/HttpFamilyRelay';
 import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
+import { ownerRevocationMessage, type OwnerRevocationStatement } from '../src/core/family/ownerRevocation';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 
@@ -218,7 +219,14 @@ export default function HomeScreen() {
                         { text: 'Remove', style: 'destructive', onPress: async () => {
                           setPairingBusy(true);
                           try {
-                            await relay.revokeMember(familyId, id);
+                            const exchange = await relay.getKeyExchange(familyId);
+                            const statement: OwnerRevocationStatement = {
+                              version: 1, action: 'revoke', familyId,
+                              ownerDeviceId: family.device.deviceId,
+                              memberDeviceId: id, keyEpoch: exchange.keyEpoch + 1,
+                            };
+                            const signature = await FamilyLocation.signIdentityChallenge(ownerRevocationMessage(statement));
+                            await relay.revokeMember(familyId, id, statement, signature);
                             const members = await relay.getMembers(familyId);
                             setFamily(updateMembers(members.members.map((m) => m.deviceId)));
                             await persistFamilyState();
