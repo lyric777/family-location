@@ -57,8 +57,14 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
-      if (revokedMemberships.has(String(b.familyId) + ':' + String(b.deviceId))) {
-        return json(res, 403, { code: 'MEMBERSHIP_REVOKED', error: 'Membership revoked' });
+      const revocation = revokedMemberships.get(String(b.familyId) + ':' + String(b.deviceId));
+      if (revocation) {
+        return json(res, 403, {
+          code: 'MEMBERSHIP_REVOKED', error: 'Membership revoked',
+          ...(revocation.statement && revocation.signature
+            ? { revocation: { statement: revocation.statement, signature: revocation.signature } }
+            : {}),
+        });
       }
       if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete', 'key-ready', 'key-status'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
