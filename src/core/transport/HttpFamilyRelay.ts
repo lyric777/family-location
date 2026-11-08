@@ -6,12 +6,15 @@ import type { OwnerRevocationStatement } from '../family/ownerRevocation';
 export type RelayMember = { deviceId: string; publicKey: string };
 export type RelayFamily = { familyId: string; members: RelayMember[] };
 
+export type RelayRevocationEvidence = { statement: OwnerRevocationStatement; signature: string };
+
 export class RelayHttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string | null,
     readonly requestPath: string,
     message: string,
+    readonly revocation: RelayRevocationEvidence | null = null,
   ) {
     super(message);
     this.name = 'RelayHttpError';
@@ -41,6 +44,10 @@ export class HttpFamilyRelay {
         typeof body.code === 'string' ? body.code : null,
         path,
         typeof body.error === 'string' ? body.error : 'Relay request failed',
+        body.revocation && typeof body.revocation === 'object' &&
+          typeof body.revocation.signature === 'string' && body.revocation.statement &&
+          typeof body.revocation.statement === 'object'
+          ? body.revocation as RelayRevocationEvidence : null,
       );
       return body as T;
     } catch (error) {
