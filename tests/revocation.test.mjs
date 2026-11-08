@@ -64,6 +64,14 @@ test('revoked member has a distinct challenge error', async t => {
   const after = await signed(base, member, familyId, 'members', membersPath);
   assert.equal(after.status, 403);
   assert.equal(after.data.code, 'MEMBERSHIP_REVOKED');
+  assert.deepEqual(after.data.revocation?.statement, statement);
+  assert.equal(after.data.revocation?.signature, signature);
+  const revokedMessage = JSON.stringify([
+    'family-revocation-v1', familyId, owner.deviceId, member.deviceId, 2,
+  ]);
+  assert.equal((await import('node:crypto')).verify('sha256', Buffer.from(revokedMessage),
+    owner.privateKey === undefined ? null : (await import('node:crypto')).createPublicKey(owner.privateKey),
+    Buffer.from(after.data.revocation.signature, 'base64')), true);
   assert.equal((await signed(base, member, familyId, 'key-read', '/v1/families/' + encodeURIComponent(familyId) + '/key-read')).status, 403);
   assert.equal((await signed(base, owner, familyId, 'members', membersPath)).status, 200);
 });
