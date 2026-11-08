@@ -17,7 +17,7 @@ import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '
 import { applyCreatedFamily, applyJoinedFamily, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay, RelayHttpError } from '../src/core/transport/HttpFamilyRelay';
 import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
-import { ownerRevocationMessage, type OwnerRevocationStatement } from '../src/core/family/ownerRevocation';
+import { ownerRevocationMessage, verifyOwnerRevocation, type OwnerRevocationStatement } from '../src/core/family/ownerRevocation';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
 
@@ -59,6 +59,20 @@ export default function HomeScreen() {
   const syncInFlight = useRef(false);
   const revokedFamilyRef = useRef<string | null>(null);
   familyRef.current = family;
+
+  const verifyRevocationError = async (error: unknown, current: LocalFamilyState) => {
+    if (!(error instanceof RelayHttpError) || error.code !== 'MEMBERSHIP_REVOKED' ||
+        !error.revocation || !current.familyId || !current.ownerDeviceId ||
+        !current.ownerPublicKey) return false;
+    const epoch = await FamilyLocation.getFamilyKeyEpoch(current.familyId);
+    return verifyOwnerRevocation(error.revocation.statement, error.revocation.signature, {
+      familyId: current.familyId,
+      ownerDeviceId: current.ownerDeviceId,
+      ownerPublicKey: current.ownerPublicKey,
+      memberDeviceId: current.device.deviceId,
+      minimumEpoch: epoch,
+    });
+  };
 
   const syncFamilyKey = async (familyId: string, owner: boolean) => {
     if (!relay) return;
@@ -123,8 +137,12 @@ export default function HomeScreen() {
       } catch (error) {
         if (mounted && familyRef.current.familyId === current.familyId) {
           if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') {
-            revokedFamilyRef.current = current.familyId;
-            setKeyStatus('Access revoked - verification required');
+            let verified = false;
+            try { verified = await verifyRevocationError(error, current); } catch {}
+            if (mounted && familyRef.current.familyId === current.familyId) {
+              revokedFamilyRef.current = current.familyId;
+              setKeyStatus(verified ? 'Owner removal verified - cleanup pending' : 'Access revoked - verification required');
+            }
           } else setKeyStatus('Retrying');
         }
       } finally {
