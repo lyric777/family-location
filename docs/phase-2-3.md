@@ -69,6 +69,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Not yet complete:** Relay does not return the signed statement to the removed Member; Member-side signature verification and automatic cleanup are not wired. In-memory state is still lost on Relay restart. The Owner public key is pinned on first use, without out-of-band identity confirmation. New CI results and device acceptance are pending.
 - Next: add tampered signature/epoch/target tests, deliver signed evidence to Member, verify against pinned Owner key and local epoch, and only then implement safe family-specific cleanup. Keep 2.3.2 open.
 
+## 2026-11-08 progress
+
+- `3e4e374`: the development Relay now includes the stored Owner-signed revocation statement and signature in a revoked member's challenge error, when available.
+- `e56a4e2`: `RelayHttpError` exposes the optional signed evidence to the client without treating it as trusted automatically.
+- `84782c5`: the active-screen retry handler checks the statement against the locally pinned Owner identity, family, recipient, and local key epoch. It displays `Owner removal verified - cleanup pending` only after signature verification; otherwise it keeps the unverified status. **No key or membership deletion occurs.**
+- `0524e08`, `99baeb6`: Relay regression test checks evidence delivery and verifies the signature.
+- **Remaining:** handle initial/restored/manual-sync errors consistently, protect against stale asynchronous UI updates, implement verified cleanup and user notification, and define durable Relay state/restart behavior. First-use Owner key pinning is still only as trustworthy as initial pairing. Latest CI and device acceptance are not yet confirmed.
+- Do not use the development LAN Relay for sensitive real-world location sharing. Phase 2.3.2 remains unaccepted.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
