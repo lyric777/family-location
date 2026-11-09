@@ -77,7 +77,8 @@ export default function HomeScreen() {
   const cleanupInFlight = useRef(false);
   const handleVerifiedRemoval = async (error: unknown, current: LocalFamilyState) => {
     if (!current.familyId || cleanupInFlight.current) return false;
-    const verified = await verifyRevocationError(error, current);
+    let verified = false;
+    try { verified = await verifyRevocationError(error, current); } catch { return false; }
     if (!verified) return false;
     if (familyRef.current.familyId !== current.familyId) return true;
     cleanupInFlight.current = true;
