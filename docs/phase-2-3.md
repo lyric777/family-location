@@ -78,6 +78,14 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Remaining:** handle initial/restored/manual-sync errors consistently, protect against stale asynchronous UI updates, implement verified cleanup and user notification, and define durable Relay state/restart behavior. First-use Owner key pinning is still only as trustworthy as initial pairing. Latest CI and device acceptance are not yet confirmed.
 - Do not use the development LAN Relay for sensitive real-world location sharing. Phase 2.3.2 remains unaccepted.
 
+## 2026-11-09 progress
+
+- `bad115e`: verified Owner revocation now triggers client-side cleanup in foreground retry, initial restore, and manual key sync. After checking the pinned Owner signature, family/recipient binding and key epoch, the client stops the location service, deletes that family's content key, clears persisted membership, and returns to the create/join screen with a removal notice. Device identity keys are retained.
+- `3412781`: verification exceptions are treated as unverified evidence rather than triggering cleanup.
+- **Not yet accepted:** latest CI and physical Android/emulator behavior must be checked. Test removal while active, after app restart, with invalid signatures, during network loss, and after Relay restart. Inspect cleanup partial-failure recovery and asynchronous race behavior.
+- The current service is a general location foreground service, not yet the Phase 2.3.3 family-specific encrypted uploader. Stopping it on removal also stops standalone location tracking; revisit this separation before final UX.
+- The Relay is in-memory, and initial Owner identity pinning relies on the first pairing response. Neither is production-grade trust/persistence. Phase 2.3.2 remains pending until end-to-end acceptance.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
