@@ -74,17 +74,52 @@ export default function HomeScreen() {
     });
   };
 
+  const cleanupInFlight = useRef(false);
+  const handleVerifiedRemoval = async (error: unknown, current: LocalFamilyState) => {
+    if (!current.familyId || cleanupInFlight.current) return false;
+    const verified = await verifyRevocationError(error, current);
+    if (!verified) return false;
+    if (familyRef.current.familyId !== current.familyId) return true;
+    cleanupInFlight.current = true;
+    revokedFamilyRef.current = current.familyId;
+    setKeyStatus('Removing local family access');
+    try {
+      await FamilyLocation.stop();
+      await FamilyLocation.deleteFamilyKey(current.familyId);
+      if (familyRef.current.familyId !== current.familyId) return true;
+      const cleared = await clearPersistedFamily();
+      familyRef.current = cleared;
+      setFamily(cleared);
+      setKeyStatus('Not checked');
+      setPairingStep('');
+      setPairingError('');
+      Alert.alert('Removed from family', 'The family owner removed this device.');
+    } catch (cleanupError) {
+      setKeyStatus('Removal verified - cleanup failed');
+      console.warn('[Family] verified removal cleanup failed', cleanupError);
+    } finally {
+      cleanupInFlight.current = false;
+    }
+    return true;
+  };
+
   const syncFamilyKey = async (familyId: string, owner: boolean) => {
     if (!relay) return;
     setKeyStatus('Synchronizing');
     try {
       const ready = await provisionFamilyKey(relay, familyId, owner);
-      setKeyStatus(ready ? 'Ready' : owner ? 'Waiting for members' : 'Waiting for owner');
+      if (familyRef.current.familyId === familyId && revokedFamilyRef.current !== familyId) setKeyStatus(ready ? 'Ready' : owner ? 'Waiting for members' : 'Waiting for owner');
     } catch (error) {
-      setKeyStatus(error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED'
-        ? 'Access revoked - verification required' : 'Failed');
-      if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') revokedFamilyRef.current = familyId;
-      Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
+      const current = familyRef.current;
+      if (current.familyId !== familyId) return;
+      if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') {
+        if (await handleVerifiedRemoval(error, current)) return;
+        revokedFamilyRef.current = familyId;
+        setKeyStatus('Access revoked - verification required');
+      } else {
+        setKeyStatus('Failed');
+        Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
+      }
     }
   };
 
@@ -111,10 +146,16 @@ export default function HomeScreen() {
       if (loaded.familyId && relay) {
         setKeyStatus('Synchronizing');
         provisionFamilyKey(relay, loaded.familyId, loaded.role === 'owner')
-          .then((ready) => { if (mounted) setKeyStatus(ready ? 'Ready' : loaded.role === 'owner' ? 'Waiting for members' : 'Waiting for owner'); })
-          .catch((error) => {
-            if (!mounted) return;
+          .then((ready) => {
+            if (mounted && familyRef.current.familyId === loaded.familyId &&
+                revokedFamilyRef.current !== loaded.familyId) {
+              setKeyStatus(ready ? 'Ready' : loaded.role === 'owner' ? 'Waiting for members' : 'Waiting for owner');
+            }
+          })
+          .catch(async (error) => {
+            if (!mounted || familyRef.current.familyId !== loaded.familyId) return;
             if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') {
+              if (await handleVerifiedRemoval(error, loaded)) return;
               revokedFamilyRef.current = loaded.familyId;
               setKeyStatus('Access revoked - verification required');
             } else setKeyStatus('Retry required');
@@ -137,11 +178,10 @@ export default function HomeScreen() {
       } catch (error) {
         if (mounted && familyRef.current.familyId === current.familyId) {
           if (error instanceof RelayHttpError && error.code === 'MEMBERSHIP_REVOKED') {
-            let verified = false;
-            try { verified = await verifyRevocationError(error, current); } catch {}
+            if (await handleVerifiedRemoval(error, current)) return;
             if (mounted && familyRef.current.familyId === current.familyId) {
               revokedFamilyRef.current = current.familyId;
-              setKeyStatus(verified ? 'Owner removal verified - cleanup pending' : 'Access revoked - verification required');
+              setKeyStatus('Access revoked - verification required');
             }
           } else setKeyStatus('Retrying');
         }
