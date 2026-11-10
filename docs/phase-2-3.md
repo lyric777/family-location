@@ -86,6 +86,14 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - The current service is a general location foreground service, not yet the Phase 2.3.3 family-specific encrypted uploader. Stopping it on removal also stops standalone location tracking; revisit this separation before final UX.
 - The Relay is in-memory, and initial Owner identity pinning relies on the first pairing response. Neither is production-grade trust/persistence. Phase 2.3.2 remains pending until end-to-end acceptance.
 
+## 2026-11-10 regression hardening
+
+- `4027075`: extended the Node Relay test to reject forged Owner signatures, wrong key epochs, mismatched target members, and replayed removal requests. Each rejected request checks that the legitimate member remains authorized; a valid signed removal still succeeds.
+- `f83459b`: guarded foreground key-sync UI updates against late responses after verified removal begins, and prevented manual synchronization from restarting during removal cleanup.
+- **Validation pending:** check latest CI for both commits; neither automated React lifecycle tests nor physical Android/emulator acceptance have been completed for these changes.
+- **Known recovery gap:** if cleanup fails partway through (for example, the native key deletion or membership preference write fails), the current session can remain in a blocked removal state. Implement an idempotent, persistent cleanup checkpoint and restart recovery before final acceptance. A verification result returned over the LAN cannot by itself replace a trusted initial Owner key binding.
+- Next: add deterministic cleanup state-machine tests (including repeated signals, partial failures, app restart and late requests), then perform two-device removal and dissolution acceptance. Do not mark 2.3.2 PASS yet.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
