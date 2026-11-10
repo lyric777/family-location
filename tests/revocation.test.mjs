@@ -59,6 +59,23 @@ test('revoked member has a distinct challenge error', async t => {
   const signature = sign('sha256', Buffer.from(JSON.stringify([
     'family-revocation-v1', familyId, owner.deviceId, member.deviceId, 2,
   ])), owner.privateKey).toString('base64');
+  const invalidSignature = await signed(base, owner, familyId, 'revoke', revokePath, 'POST',
+    { deviceId: member.deviceId, statement, signature: sign('sha256',
+      Buffer.from(JSON.stringify(['family-revocation-v1', familyId, owner.deviceId, member.deviceId, 2])),
+      unknown.privateKey).toString('base64') });
+  assert.equal(invalidSignature.status, 403);
+  assert.equal((await signed(base, member, familyId, 'members', membersPath)).status, 200);
+
+  const wrongEpoch = await signed(base, owner, familyId, 'revoke', revokePath, 'POST',
+    { deviceId: member.deviceId, statement: { ...statement, keyEpoch: 3 }, signature });
+  assert.equal(wrongEpoch.status, 400);
+  assert.equal((await signed(base, member, familyId, 'members', membersPath)).status, 200);
+
+  const wrongRecipient = await signed(base, owner, familyId, 'revoke', revokePath, 'POST',
+    { deviceId: member.deviceId, statement: { ...statement, memberDeviceId: unknown.deviceId }, signature });
+  assert.equal(wrongRecipient.status, 400);
+  assert.equal((await signed(base, member, familyId, 'members', membersPath)).status, 200);
+
   assert.equal((await signed(base, owner, familyId, 'revoke', revokePath, 'POST',
     { deviceId: member.deviceId, statement, signature })).status, 200);
   const after = await signed(base, member, familyId, 'members', membersPath);
@@ -73,4 +90,8 @@ test('revoked member has a distinct challenge error', async t => {
     Buffer.from(after.data.revocation.signature, 'base64')), true);
   assert.equal((await signed(base, member, familyId, 'key-read', '/v1/families/' + encodeURIComponent(familyId) + '/key-read')).status, 403);
   assert.equal((await signed(base, owner, familyId, 'members', membersPath)).status, 200);
+  const replay = await signed(base, owner, familyId, 'revoke', revokePath, 'POST',
+    { deviceId: member.deviceId, statement, signature });
+  assert.equal(replay.status, 400);
+  assert.equal((await signed(base, member, familyId, 'members', membersPath)).data.code, 'MEMBERSHIP_REVOKED');
 });
