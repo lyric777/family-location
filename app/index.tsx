@@ -106,6 +106,7 @@ export default function HomeScreen() {
 
   const syncFamilyKey = async (familyId: string, owner: boolean) => {
     if (!relay) return;
+    if (revokedFamilyRef.current === familyId || cleanupInFlight.current) return;
     setKeyStatus('Synchronizing');
     try {
       const ready = await provisionFamilyKey(relay, familyId, owner);
@@ -117,7 +118,7 @@ export default function HomeScreen() {
         if (await handleVerifiedRemoval(error, current)) return;
         revokedFamilyRef.current = familyId;
         setKeyStatus('Access revoked - verification required');
-      } else {
+      } else if (revokedFamilyRef.current !== familyId && !cleanupInFlight.current) {
         setKeyStatus('Failed');
         Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
       }
@@ -173,7 +174,8 @@ export default function HomeScreen() {
       syncInFlight.current = true;
       try {
         const ready = await provisionFamilyKey(relay, current.familyId, current.role === 'owner');
-        if (mounted && familyRef.current.familyId === current.familyId) {
+        if (mounted && familyRef.current.familyId === current.familyId &&
+            revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) {
           setKeyStatus(ready ? 'Ready' : current.role === 'owner' ? 'Waiting for members' : 'Connecting');
         }
       } catch (error) {
@@ -184,7 +186,7 @@ export default function HomeScreen() {
               revokedFamilyRef.current = current.familyId;
               setKeyStatus('Access revoked - verification required');
             }
-          } else setKeyStatus('Retrying');
+          } else if (revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) setKeyStatus('Retrying');
         }
       } finally {
         syncInFlight.current = false;
