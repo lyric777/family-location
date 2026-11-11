@@ -22,7 +22,18 @@ export async function initializeFamilyState() {
   const raw = await FamilyLocation.getFamilyMembership();
   let membership: Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'> | null = null;
   if (raw) {
-    try { membership = JSON.parse(raw); } catch { membership = null; }
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.pendingVerifiedRemoval && typeof parsed.pendingVerifiedRemoval.familyId === 'string' &&
+          parsed.pendingVerifiedRemoval.familyId === parsed.familyId) {
+        await completeVerifiedRemoval(parsed.pendingVerifiedRemoval.familyId);
+      } else {
+        membership = parsed;
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) membership = null;
+      else throw error;
+    }
   }
   state = {
     ...current,
@@ -41,6 +52,31 @@ export async function persistFamilyState() {
     role: current.role, memberDeviceIds: current.memberDeviceIds,
     ownerDeviceId: current.ownerDeviceId, ownerPublicKey: current.ownerPublicKey,
   }));
+}
+
+// A durable checkpoint is written only after the caller has verified the Owner signature.
+// Repeating completion after a crash is safe; device identity keys are not touched.
+export async function beginVerifiedRemoval(familyId: string) {
+  const current = getOrCreateLocalFamilyState();
+  if (current.familyId !== familyId) throw new Error('Family changed before removal checkpoint');
+  await FamilyLocation.saveFamilyMembership(JSON.stringify({
+    familyId,
+    pendingVerifiedRemoval: { familyId },
+  }));
+}
+
+export async function completeVerifiedRemoval(familyId: string) {
+  const raw = await FamilyLocation.getFamilyMembership();
+  if (!raw) return resetLocalFamily();
+  const stored = JSON.parse(raw);
+  if (stored?.familyId !== familyId ||
+      stored?.pendingVerifiedRemoval?.familyId !== familyId) {
+    throw new Error('Missing verified removal checkpoint');
+  }
+  await FamilyLocation.stop();
+  await FamilyLocation.deleteFamilyKey(familyId);
+  await FamilyLocation.clearFamilyMembership();
+  return resetLocalFamily();
 }
 
 export async function clearPersistedFamily() {
