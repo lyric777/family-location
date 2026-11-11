@@ -47,6 +47,11 @@ export async function initializeFamilyState() {
 
 export async function persistFamilyState() {
   const current = getOrCreateLocalFamilyState();
+  const stored = await FamilyLocation.getFamilyMembership();
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    if (parsed?.pendingVerifiedRemoval) throw new Error('Verified removal is pending');
+  }
   await FamilyLocation.saveFamilyMembership(JSON.stringify({
     familyId: current.familyId, inviteCode: current.inviteCode,
     role: current.role, memberDeviceIds: current.memberDeviceIds,
