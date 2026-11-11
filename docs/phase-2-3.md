@@ -94,6 +94,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Known recovery gap:** if cleanup fails partway through (for example, the native key deletion or membership preference write fails), the current session can remain in a blocked removal state. Implement an idempotent, persistent cleanup checkpoint and restart recovery before final acceptance. A verification result returned over the LAN cannot by itself replace a trusted initial Owner key binding.
 - Next: add deterministic cleanup state-machine tests (including repeated signals, partial failures, app restart and late requests), then perform two-device removal and dissolution acceptance. Do not mark 2.3.2 PASS yet.
 
+## 2026-11-11 progress — resumable verified removal
+
+- `d1e43ba`: verified removal now has a persisted checkpoint in the existing native membership storage. Startup detects a matching `pendingVerifiedRemoval` and attempts to complete cleanup before returning normal family state. Completion stops the service, deletes the family key, clears membership, and preserves the device identity.
+- `17abb3c`: the verified Owner removal path uses checkpoint + completion rather than an untracked sequence of destructive operations.
+- `49a0ddb`: ordinary membership persistence rejects a pending-removal checkpoint rather than overwriting it with stale state.
+- **Limitations:** this is not a transaction across Android preference writes and key storage. Concurrent async writes, failed checkpoint writes, process termination between native calls, and corrupted membership JSON need further device/fault-injection tests. A failed recovery currently surfaces as an initialization error; it does not silently rejoin the family.
+- **Acceptance pending:** latest CI, Android build, OPPO/emulator removal while active and after restart, failure injection, network outage, and Owner dissolution. Automated Node Relay tests do not exercise native storage or React lifecycle.
+- The development Relay remains volatile and initial Owner pinning lacks out-of-band verification. Do not use it for real sensitive location sharing; Phase 2.3.2 is not yet accepted.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
