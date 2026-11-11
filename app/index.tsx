@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
-import { applyCreatedFamily, applyJoinedFamily, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
+import { applyCreatedFamily, applyJoinedFamily, beginVerifiedRemoval, completeVerifiedRemoval, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay, RelayHttpError } from '../src/core/transport/HttpFamilyRelay';
 import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
 import { ownerRevocationMessage, verifyOwnerRevocation, type OwnerRevocationStatement } from '../src/core/family/ownerRevocation';
@@ -85,10 +85,8 @@ export default function HomeScreen() {
     revokedFamilyRef.current = current.familyId;
     setKeyStatus('Removing local family access');
     try {
-      await FamilyLocation.stop();
-      await FamilyLocation.deleteFamilyKey(current.familyId);
-      if (familyRef.current.familyId !== current.familyId) return true;
-      const cleared = await clearPersistedFamily();
+      await beginVerifiedRemoval(current.familyId);
+      const cleared = await completeVerifiedRemoval(current.familyId);
       familyRef.current = cleared;
       setFamily(cleared);
       setKeyStatus('Not checked');
