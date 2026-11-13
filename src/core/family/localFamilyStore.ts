@@ -36,7 +36,7 @@ export async function initializeFamilyState() {
       }
       await completeVerifiedRemoval(stored.familyId);
     } else {
-      membership = stored as typeof membership;
+      membership = stored as unknown as NonNullable<typeof membership>;
     }
   }
   state = {
