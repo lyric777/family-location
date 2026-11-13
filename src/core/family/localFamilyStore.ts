@@ -22,17 +22,21 @@ export async function initializeFamilyState() {
   const raw = await FamilyLocation.getFamilyMembership();
   let membership: Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'> | null = null;
   if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed?.pendingVerifiedRemoval && typeof parsed.pendingVerifiedRemoval.familyId === 'string' &&
-          parsed.pendingVerifiedRemoval.familyId === parsed.familyId) {
-        await completeVerifiedRemoval(parsed.pendingVerifiedRemoval.familyId);
-      } else {
-        membership = parsed;
+    // Parse errors must not be confused with errors while resuming cleanup.
+    // Never restore a family while a verified removal checkpoint is pending.
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid family membership');
+    const stored = parsed as Record<string, unknown>;
+    if (stored.pendingVerifiedRemoval !== undefined) {
+      const pending = stored.pendingVerifiedRemoval;
+      if (!pending || typeof pending !== 'object' ||
+          (pending as Record<string, unknown>).familyId !== stored.familyId ||
+          typeof stored.familyId !== 'string') {
+        throw new Error('Invalid verified removal checkpoint');
       }
-    } catch (error) {
-      if (error instanceof SyntaxError) membership = null;
-      else throw error;
+      await completeVerifiedRemoval(stored.familyId);
+    } else {
+      membership = stored as typeof membership;
     }
   }
   state = {
