@@ -103,6 +103,14 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Acceptance pending:** latest CI, Android build, OPPO/emulator removal while active and after restart, failure injection, network outage, and Owner dissolution. Automated Node Relay tests do not exercise native storage or React lifecycle.
 - The development Relay remains volatile and initial Owner pinning lacks out-of-band verification. Do not use it for real sensitive location sharing; Phase 2.3.2 is not yet accepted.
 
+## 2026-11-13 recovery hardening
+
+- `8aff0ac`: startup now parses membership separately from executing pending verified removal. A malformed checkpoint fails closed rather than restoring family access. Cleanup exceptions propagate instead of being mistaken for JSON parse errors.
+- `d8a3aa8`: initial family recovery is awaited before processing the native resume-sharing intent. This prevents a pending removal from racing with location service restart.
+- `ef9a321`: clarified the restored membership TypeScript cast.
+- **Not yet tested on devices:** partial cleanup failures, corrupt preference data, restart recovery, and resumed location behavior. CI still needs confirmation for these commits. No new automated native recovery test was added.
+- Next: test checkpoint recovery on Android with deliberate interruption, verify idempotent deletion, and run the full OPPO/emulator acceptance including Owner removal and dissolution. Do not mark 2.3.2 PASS based on CI alone.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
