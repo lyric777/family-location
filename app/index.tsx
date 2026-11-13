@@ -139,7 +139,10 @@ export default function HomeScreen() {
       }
       refresh();
     };
-    initializeFamilyState().then((loaded) => {
+    initializeFamilyState().then(async (loaded) => {
+      if (!mounted) return;
+      // Recovery must finish before a resume intent can restart location sharing.
+      await initialize();
       if (!mounted) return;
       setFamily(loaded);
       setIdentityReady(true);
@@ -162,7 +165,6 @@ export default function HomeScreen() {
           });
       }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
-    initialize();
     const timer = setInterval(refresh, 2_000);
     // While the UI is active, automatically deliver keys to newly joined members
     // and recover after revocation/rotation. Never run overlapping exchanges.
