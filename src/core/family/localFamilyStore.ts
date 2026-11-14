@@ -20,7 +20,8 @@ export async function initializeFamilyState() {
   const identity = await FamilyLocation.getDeviceIdentity();
   const current = getOrCreateLocalFamilyState();
   const raw = await FamilyLocation.getFamilyMembership();
-  let membership: Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'> | null = null;
+  type StoredMembership = Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'>;
+  let membership: StoredMembership | null = null;
   if (raw) {
     // Parse errors must not be confused with errors while resuming cleanup.
     // Never restore a family while a verified removal checkpoint is pending.
@@ -36,15 +37,15 @@ export async function initializeFamilyState() {
       }
       await completeVerifiedRemoval(stored.familyId);
     } else {
-      membership = stored as unknown as NonNullable<typeof membership>;
+      membership = stored as unknown as StoredMembership;
     }
   }
   state = {
     ...current,
     device: { deviceId: identity.deviceId, displayName: identity.displayName, createdAtMs: current.device.createdAtMs },
     ...(membership ?? { familyId: null, inviteCode: null, role: null, memberDeviceIds: [] }),
-    ownerDeviceId: membership?.ownerDeviceId ?? null,
-    ownerPublicKey: membership?.ownerPublicKey ?? null,
+    ownerDeviceId: (membership as StoredMembership | null)?.ownerDeviceId ?? null,
+    ownerPublicKey: (membership as StoredMembership | null)?.ownerPublicKey ?? null,
   };
   return state;
 }
