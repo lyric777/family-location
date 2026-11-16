@@ -111,6 +111,13 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Not yet tested on devices:** partial cleanup failures, corrupt preference data, restart recovery, and resumed location behavior. CI still needs confirmation for these commits. No new automated native recovery test was added.
 - Next: test checkpoint recovery on Android with deliberate interruption, verify idempotent deletion, and run the full OPPO/emulator acceptance including Owner removal and dissolution. Do not mark 2.3.2 PASS based on CI alone.
 
+## 2026-11-16 revocation acceptance diagnostic
+
+- Physical Owner removal succeeded, but the emulator remained in `Access revoked - verification required`, with cached membership still shown. Phase 2.3.2 second-round acceptance **failed**.
+- `0a3aba7`: added on-screen, non-secret diagnostic details for revocation evidence presence, pinned Owner key presence, local and signed key epochs, binding checks, fingerprint and signature verification result. The app does not print keys, signatures, family IDs or device IDs in this diagnostic.
+- Next: rebuild the Release APK, reproduce the revoke test with a newly created family, and capture the diagnostic reason. Do not delete local data before investigating the current failed state. This is diagnostic code only; it does not relax verification or change cleanup authorization.
+- Existing Relay restart / lost-family recovery remains a separate unresolved acceptance issue.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
