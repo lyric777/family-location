@@ -54,6 +54,7 @@ export default function HomeScreen() {
   const [pairingError, setPairingError] = useState('');
   const [identityReady, setIdentityReady] = useState(false);
   const [keyStatus, setKeyStatus] = useState('Not checked');
+  const [revocationDiagnostic, setRevocationDiagnostic] = useState('');
   const relay = getConfiguredRelay();
   const familyRef = useRef(family);
   const syncInFlight = useRef(false);
@@ -61,24 +62,42 @@ export default function HomeScreen() {
   familyRef.current = family;
 
   const verifyRevocationError = async (error: unknown, current: LocalFamilyState) => {
-    if (!(error instanceof RelayHttpError) || error.code !== 'MEMBERSHIP_REVOKED' ||
-        !error.revocation || !current.familyId || !current.ownerDeviceId ||
-        !current.ownerPublicKey) return false;
-    const epoch = await FamilyLocation.getFamilyKeyEpoch(current.familyId);
-    return verifyOwnerRevocation(error.revocation.statement, error.revocation.signature, {
+    if (!(error instanceof RelayHttpError) || error.code !== 'MEMBERSHIP_REVOKED') return false;
+    const evidence = error.revocation;
+    const localKey = !!current.ownerPublicKey && !!current.ownerDeviceId;
+    const localEpoch = current.familyId ? await FamilyLocation.getFamilyKeyEpoch(current.familyId) : -1;
+    const statement = evidence?.statement;
+    const remoteEpoch = statement?.keyEpoch;
+    const prefix = `Evidence: ${evidence ? 'present' : 'missing'} | Owner key: ${localKey ? 'present' : 'missing'} | Epoch: ${localEpoch} -> ${Number.isSafeInteger(remoteEpoch) ? remoteEpoch : 'invalid'}`;
+    const fail = (reason: string) => {
+      setRevocationDiagnostic(`${prefix} | Check: ${reason}`);
+      return false;
+    };
+    if (!evidence || !current.familyId || !localKey) return fail('missing evidence or owner identity');
+    if (statement.version !== 1 || statement.action !== 'revoke') return fail('statement format');
+    if (statement.familyId !== current.familyId ||
+        statement.ownerDeviceId !== current.ownerDeviceId ||
+        statement.memberDeviceId !== current.device.deviceId) return fail('family / device binding');
+    if (!Number.isSafeInteger(remoteEpoch) || remoteEpoch <= localEpoch) return fail('epoch not newer');
+    const ownerFingerprint = await FamilyLocation.sha256HexBase64(current.ownerPublicKey!);
+    if ('dev_' + ownerFingerprint !== current.ownerDeviceId) return fail('owner key fingerprint');
+    const verified = await verifyOwnerRevocation(statement, evidence.signature, {
       familyId: current.familyId,
-      ownerDeviceId: current.ownerDeviceId,
-      ownerPublicKey: current.ownerPublicKey,
+      ownerDeviceId: current.ownerDeviceId!,
+      ownerPublicKey: current.ownerPublicKey!,
       memberDeviceId: current.device.deviceId,
-      minimumEpoch: epoch,
+      minimumEpoch: localEpoch,
     });
+    setRevocationDiagnostic(`${prefix} | Check: ${verified ? 'signature valid' : 'signature invalid'}`);
+    return verified;
   };
 
   const cleanupInFlight = useRef(false);
   const handleVerifiedRemoval = async (error: unknown, current: LocalFamilyState) => {
     if (!current.familyId || cleanupInFlight.current) return false;
     let verified = false;
-    try { verified = await verifyRevocationError(error, current); } catch { return false; }
+    try { verified = await verifyRevocationError(error, current); }
+    catch { setRevocationDiagnostic('Revocation verification threw an error (no secrets logged)'); return false; }
     if (!verified) return false;
     if (familyRef.current.familyId !== current.familyId) return true;
     cleanupInFlight.current = true;
@@ -90,6 +109,7 @@ export default function HomeScreen() {
       familyRef.current = cleared;
       setFamily(cleared);
       setKeyStatus('Not checked');
+      setRevocationDiagnostic('');
       setPairingStep('');
       setPairingError('');
       Alert.alert('Removed from family', 'The family owner removed this device.');
@@ -264,6 +284,7 @@ export default function HomeScreen() {
                 {family.role === 'owner' ? 'Share this code with the second device.' : 'Joined through the LAN relay.'}
               </Text>
               <Text style={styles.meta}>Family key: {keyStatus}</Text>
+              {revocationDiagnostic ? <Text selectable style={styles.error}>Revocation diagnostic: {revocationDiagnostic}</Text> : null}
               <Pressable style={styles.secondaryButton} onPress={() => syncFamilyKey(family.familyId!, family.role === 'owner')}>
                 <Text style={styles.secondaryButtonText}>Sync family key</Text>
               </Pressable>
