@@ -401,7 +401,9 @@ export default function HomeScreen() {
                         setFamily(await clearPersistedFamily());
                         setKeyStatus('Not checked');
                       } catch (error) {
-                        Alert.alert('Cannot update family', error instanceof Error ? error.message : String(error));
+                        if (!markMissingFamily(error, familyId)) {
+                          Alert.alert('Cannot update family', error instanceof Error ? error.message : String(error));
+                        }
                       } finally {
                         setPairingBusy(false);
                       }
