@@ -74,12 +74,12 @@ export default function HomeScreen() {
       setRevocationDiagnostic(`${prefix} | Check: ${reason}`);
       return false;
     };
-    if (!evidence || !current.familyId || !localKey) return fail('missing evidence or owner identity');
+    if (!evidence || !statement || !current.familyId || !localKey) return fail('missing evidence or owner identity');
     if (statement.version !== 1 || statement.action !== 'revoke') return fail('statement format');
     if (statement.familyId !== current.familyId ||
         statement.ownerDeviceId !== current.ownerDeviceId ||
         statement.memberDeviceId !== current.device.deviceId) return fail('family / device binding');
-    if (!Number.isSafeInteger(remoteEpoch) || remoteEpoch <= localEpoch) return fail('epoch not newer');
+    if (typeof remoteEpoch !== 'number' || !Number.isSafeInteger(remoteEpoch) || remoteEpoch <= localEpoch) return fail('epoch not newer');
     const ownerFingerprint = await FamilyLocation.sha256HexBase64(current.ownerPublicKey!);
     if ('dev_' + ownerFingerprint !== current.ownerDeviceId) return fail('owner key fingerprint');
     const verified = await verifyOwnerRevocation(statement, evidence.signature, {
