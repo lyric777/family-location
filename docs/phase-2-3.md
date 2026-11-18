@@ -118,6 +118,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - Next: rebuild the Release APK, reproduce the revoke test with a newly created family, and capture the diagnostic reason. Do not delete local data before investigating the current failed state. This is diagnostic code only; it does not relax verification or change cleanup authorization.
 - Existing Relay restart / lost-family recovery remains a separate unresolved acceptance issue.
 
+## 2026-11-18 missing Relay family recovery
+
+- Device logs showed HTTP 403 `Not a family member` for both Owner and Member after restarting the development Relay; no signed revocation evidence was delivered. This is not evidence of an Owner revocation.
+- `9ef0a6b`: challenge endpoint returns `FAMILY_NOT_FOUND` (404) when the family is absent, distinct from unknown members (403) and signed member revocation (403).
+- `e19de32`: the client displays `Family unavailable on relay` and offers an explicit, confirmed **local-only** reset. The reset stops the native location service, deletes this family's key, clears membership, and retains device identity. It never claims to dissolve the family remotely.
+- `c056d83`: regression test checks the missing-family error code.
+- **Still pending:** latest CI, Android device acceptance, reliable partial-failure recovery for manual local reset, Relay persistence across restart, and proper handling of deliberate Owner dissolution for remote members. Do not treat an unauthenticated missing-family response as proof of revocation or automatically delete local keys.
+- README unchanged; Phase 2.3.2 remains unaccepted.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
