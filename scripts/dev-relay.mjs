@@ -66,6 +66,7 @@ http.createServer(async (req, res) => {
             : {}),
         });
       }
+      if (!family) return json(res, 404, { code: 'FAMILY_NOT_FOUND', error: 'Family not found on relay' });
       if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete', 'key-ready', 'key-status'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
