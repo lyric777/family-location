@@ -55,6 +55,7 @@ export default function HomeScreen() {
   const [identityReady, setIdentityReady] = useState(false);
   const [keyStatus, setKeyStatus] = useState('Not checked');
   const [revocationDiagnostic, setRevocationDiagnostic] = useState('');
+  const [familyUnavailable, setFamilyUnavailable] = useState(false);
   const relay = getConfiguredRelay();
   const familyRef = useRef(family);
   const syncInFlight = useRef(false);
@@ -90,6 +91,14 @@ export default function HomeScreen() {
     });
     setRevocationDiagnostic(`${prefix} | Check: ${verified ? 'signature valid' : 'signature invalid'}`);
     return verified;
+  };
+
+  const markMissingFamily = (error: unknown, familyId: string) => {
+    if (!(error instanceof RelayHttpError) || error.code !== 'FAMILY_NOT_FOUND' ||
+        familyRef.current.familyId !== familyId) return false;
+    setFamilyUnavailable(true);
+    setKeyStatus('Family unavailable on relay');
+    return true;
   };
 
   const cleanupInFlight = useRef(false);
@@ -136,6 +145,8 @@ export default function HomeScreen() {
         if (await handleVerifiedRemoval(error, current)) return;
         revokedFamilyRef.current = familyId;
         setKeyStatus('Access revoked - verification required');
+      } else if (markMissingFamily(error, familyId)) {
+        return;
       } else if (revokedFamilyRef.current !== familyId && !cleanupInFlight.current) {
         setKeyStatus('Failed');
         Alert.alert('Family key sync failed', error instanceof Error ? error.message : String(error));
@@ -181,7 +192,7 @@ export default function HomeScreen() {
               if (await handleVerifiedRemoval(error, loaded)) return;
               revokedFamilyRef.current = loaded.familyId;
               setKeyStatus('Access revoked - verification required');
-            } else setKeyStatus('Retry required');
+            } else if (!markMissingFamily(error, loaded.familyId!)) setKeyStatus('Retry required');
           });
       }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
@@ -206,7 +217,7 @@ export default function HomeScreen() {
               revokedFamilyRef.current = current.familyId;
               setKeyStatus('Access revoked - verification required');
             }
-          } else if (revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) setKeyStatus('Retrying');
+          } else if (!markMissingFamily(error, current.familyId) && revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) setKeyStatus('Retrying');
         }
       } finally {
         syncInFlight.current = false;
@@ -284,6 +295,37 @@ export default function HomeScreen() {
                 {family.role === 'owner' ? 'Share this code with the second device.' : 'Joined through the LAN relay.'}
               </Text>
               <Text style={styles.meta}>Family key: {keyStatus}</Text>
+              {familyUnavailable ? (
+                <View style={styles.warning}>
+                  <Text style={styles.warningTitle}>Family unavailable on relay</Text>
+                  <Text style={styles.warningText}>The development relay no longer recognizes this family. You can reset this device without affecting other devices.</Text>
+                  <Pressable style={styles.secondaryButton} disabled={pairingBusy} onPress={() => {
+                    Alert.alert('Reset local family?', 'This deletes the local family key and membership on this device only.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Reset this device', style: 'destructive', onPress: async () => {
+                        setPairingBusy(true);
+                        try {
+                          const id = familyRef.current.familyId;
+                          if (!id) return;
+                          await FamilyLocation.stop();
+                          await FamilyLocation.deleteFamilyKey(id);
+                          const cleared = await clearPersistedFamily();
+                          familyRef.current = cleared;
+                          setFamily(cleared);
+                          setFamilyUnavailable(false);
+                          setKeyStatus('Not checked');
+                          setRevocationDiagnostic('');
+                        } catch (error) {
+                          Alert.alert('Local reset failed', error instanceof Error ? error.message : String(error));
+                        } finally { setPairingBusy(false); }
+                      } },
+                    ]);
+                  }}>
+                    <Text style={styles.secondaryButtonText}>Reset local family</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               {revocationDiagnostic ? <Text selectable style={styles.error}>Revocation diagnostic: {revocationDiagnostic}</Text> : null}
               <Pressable style={styles.secondaryButton} onPress={() => syncFamilyKey(family.familyId!, family.role === 'owner')}>
                 <Text style={styles.secondaryButtonText}>Sync family key</Text>
