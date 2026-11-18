@@ -51,6 +51,10 @@ test('revoked member has a distinct challenge error', async t => {
   })).status, 200);
   const membersPath = '/v1/families/' + encodeURIComponent(familyId) + '/members';
   const revokePath = '/v1/families/' + encodeURIComponent(familyId) + '/revoke';
+  const missing = await signed(base, member, 'fam_missing_test', 'members',
+    '/v1/families/fam_missing_test/members');
+  assert.equal(missing.status, 404);
+  assert.equal(missing.data.code, 'FAMILY_NOT_FOUND');
   const before = await signed(base, unknown, familyId, 'members', membersPath);
   assert.equal(before.status, 403);
   assert.equal(before.data.error, 'Not a family member');
