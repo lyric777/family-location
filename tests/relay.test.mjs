@@ -105,5 +105,5 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   assert.equal((await authorized(base, owner, familyId, 'key-ready', path('key-ready'), 'POST', { epoch: 1, confirmation: confirm })).status, 400);
   assert.equal((await authorized(base, owner, familyId, 'rotation-complete', path('rotation-complete'), 'POST', { epoch: 2 })).status, 200);
   assert.equal((await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST', {})).status, 200);
-  assert.equal((await authorized(base, owner, familyId, 'members', path('members'))).status, 403);
+  assert.equal((await authorized(base, owner, familyId, 'members', path('members'))).status, 404);
 });
