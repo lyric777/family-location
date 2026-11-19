@@ -64,8 +64,10 @@ export default function HomeScreen() {
 
   const verifyRevocationError = async (error: unknown, current: LocalFamilyState) => {
     if (!(error instanceof RelayHttpError) || error.code !== 'MEMBERSHIP_REVOKED') return false;
+    const latest = getOrCreateLocalFamilyState();
+    const verifiedState = latest.familyId === current.familyId ? latest : current;
     const evidence = error.revocation;
-    const localKey = !!current.ownerPublicKey && !!current.ownerDeviceId;
+    const localKey = !!verifiedState.ownerPublicKey && !!verifiedState.ownerDeviceId;
     const localEpoch = current.familyId ? await FamilyLocation.getFamilyKeyEpoch(current.familyId) : -1;
     const statement = evidence?.statement;
     const remoteEpoch = statement?.keyEpoch;
@@ -77,15 +79,15 @@ export default function HomeScreen() {
     if (!evidence || !statement || !current.familyId || !localKey) return fail('missing evidence or owner identity');
     if (statement.version !== 1 || statement.action !== 'revoke') return fail('statement format');
     if (statement.familyId !== current.familyId ||
-        statement.ownerDeviceId !== current.ownerDeviceId ||
+        statement.ownerDeviceId !== verifiedState.ownerDeviceId ||
         statement.memberDeviceId !== current.device.deviceId) return fail('family / device binding');
     if (typeof remoteEpoch !== 'number' || !Number.isSafeInteger(remoteEpoch) || remoteEpoch <= localEpoch) return fail('epoch not newer');
-    const ownerFingerprint = await FamilyLocation.sha256HexBase64(current.ownerPublicKey!);
-    if ('dev_' + ownerFingerprint !== current.ownerDeviceId) return fail('owner key fingerprint');
+    const ownerFingerprint = await FamilyLocation.sha256HexBase64(verifiedState.ownerPublicKey!);
+    if ('dev_' + ownerFingerprint !== verifiedState.ownerDeviceId) return fail('owner key fingerprint');
     const verified = await verifyOwnerRevocation(statement, evidence.signature, {
       familyId: current.familyId,
-      ownerDeviceId: current.ownerDeviceId!,
-      ownerPublicKey: current.ownerPublicKey!,
+      ownerDeviceId: verifiedState.ownerDeviceId!,
+      ownerPublicKey: verifiedState.ownerPublicKey!,
       memberDeviceId: current.device.deviceId,
       minimumEpoch: localEpoch,
     });
@@ -137,7 +139,12 @@ export default function HomeScreen() {
     setKeyStatus('Synchronizing');
     try {
       const ready = await provisionFamilyKey(relay, familyId, owner);
-      if (familyRef.current.familyId === familyId && revokedFamilyRef.current !== familyId) setKeyStatus(ready ? 'Ready' : owner ? 'Waiting for members' : 'Waiting for owner');
+      if (familyRef.current.familyId === familyId && revokedFamilyRef.current !== familyId) {
+        const latest = getOrCreateLocalFamilyState();
+        familyRef.current = latest;
+        setFamily(latest);
+        setKeyStatus(ready ? 'Ready' : owner ? 'Waiting for members' : 'Waiting for owner');
+      }
     } catch (error) {
       const current = familyRef.current;
       if (current.familyId !== familyId) return;
@@ -183,6 +190,9 @@ export default function HomeScreen() {
           .then((ready) => {
             if (mounted && familyRef.current.familyId === loaded.familyId &&
                 revokedFamilyRef.current !== loaded.familyId) {
+              const latest = getOrCreateLocalFamilyState();
+              familyRef.current = latest;
+              setFamily(latest);
               setKeyStatus(ready ? 'Ready' : loaded.role === 'owner' ? 'Waiting for members' : 'Waiting for owner');
             }
           })
@@ -207,6 +217,12 @@ export default function HomeScreen() {
         const ready = await provisionFamilyKey(relay, current.familyId, current.role === 'owner');
         if (mounted && familyRef.current.familyId === current.familyId &&
             revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) {
+          const members = await relay.getMembers(current.familyId);
+          if (familyRef.current.familyId !== current.familyId || revokedFamilyRef.current === current.familyId) return;
+          const latest = updateMembers(members.members.map((member) => member.deviceId));
+          familyRef.current = latest;
+          setFamily(latest);
+          await persistFamilyState();
           setKeyStatus(ready ? 'Ready' : current.role === 'owner' ? 'Waiting for members' : 'Connecting');
         }
       } catch (error) {
