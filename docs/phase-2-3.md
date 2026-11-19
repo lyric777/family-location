@@ -127,6 +127,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Still pending:** latest CI, Android device acceptance, reliable partial-failure recovery for manual local reset, Relay persistence across restart, and proper handling of deliberate Owner dissolution for remote members. Do not treat an unauthenticated missing-family response as proof of revocation or automatically delete local keys.
 - README unchanged; Phase 2.3.2 remains unaccepted.
 
+## 2026-11-19 verified removal checkpoint failure
+
+- Two-device test reached `Evidence: present | Owner key: present | Epoch: 1 -> 2 | Check: signature valid`, but cleanup failed. Android log showed `FamilyLocation.saveFamilyMembership` rejected with `IllegalArgumentException: Failed requirement`.
+- Root cause: native `FamilyIdentity.saveMembership` requires both `familyId` and `role`, but the pending-removal checkpoint omitted `role`.
+- `4512d62`: checkpoint now includes the existing local role.
+- `2c65b14`: native membership validation checks that a pending-removal checkpoint is bound to the same family ID.
+- **CI and device re-test pending.** This change touches Kotlin; a new APK build is required. Do not clear the emulator's app data before re-test. Phase 2.3.2 removal acceptance remains open.
+- Follow-up: add automated native storage tests for valid checkpoint, malformed checkpoint, interrupted cleanup and restart recovery. The existing Node Relay tests do not cover Android SharedPreferences.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
