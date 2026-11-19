@@ -71,6 +71,7 @@ export async function beginVerifiedRemoval(familyId: string) {
   if (current.familyId !== familyId) throw new Error('Family changed before removal checkpoint');
   await FamilyLocation.saveFamilyMembership(JSON.stringify({
     familyId,
+    role: current.role,
     pendingVerifiedRemoval: { familyId },
   }));
 }
