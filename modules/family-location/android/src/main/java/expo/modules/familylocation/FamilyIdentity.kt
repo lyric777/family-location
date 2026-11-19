@@ -67,6 +67,10 @@ object FamilyIdentity {
   fun saveMembership(context: Context, json: String) {
     val data = JSONObject(json)
     require(data.has("familyId") && data.has("role"))
+    if (data.has("pendingVerifiedRemoval")) {
+      val pending = data.getJSONObject("pendingVerifiedRemoval")
+      require(pending.getString("familyId") == data.getString("familyId"))
+    }
     check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(MEMBERSHIP, json).commit())
   }
 
