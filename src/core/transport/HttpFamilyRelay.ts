@@ -61,7 +61,7 @@ export class HttpFamilyRelay {
   }
 
   createFamily(request: CreateFamilyRequest) {
-    return this.request<CreateFamilyResponse & { members: RelayMember[] }>('/v1/families', { method: 'POST', body: JSON.stringify(request) });
+    return this.request<CreateFamilyResponse & { members: RelayMember[]; expiresAt: number }>('/v1/families', { method: 'POST', body: JSON.stringify(request) });
   }
 
   createInvite(familyId: string) {
