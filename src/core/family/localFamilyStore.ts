@@ -5,6 +5,7 @@ export type LocalFamilyState = {
   device: DeviceIdentity;
   familyId: FamilyId | null;
   inviteCode: string | null;
+  inviteExpiresAt: number | null;
   role: 'owner' | 'member' | null;
   memberDeviceIds: string[];
   ownerDeviceId: string | null;
@@ -20,7 +21,7 @@ export async function initializeFamilyState() {
   const identity = await FamilyLocation.getDeviceIdentity();
   const current = getOrCreateLocalFamilyState();
   const raw = await FamilyLocation.getFamilyMembership();
-  type StoredMembership = Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'>;
+  type StoredMembership = Pick<LocalFamilyState, 'familyId' | 'inviteCode' | 'inviteExpiresAt' | 'role' | 'memberDeviceIds' | 'ownerDeviceId' | 'ownerPublicKey'>;
   let membership: StoredMembership | null = null;
   if (raw) {
     // Parse errors must not be confused with errors while resuming cleanup.
@@ -43,7 +44,8 @@ export async function initializeFamilyState() {
   state = {
     ...current,
     device: { deviceId: identity.deviceId, displayName: identity.displayName, createdAtMs: current.device.createdAtMs },
-    ...(membership ?? { familyId: null, inviteCode: null, role: null, memberDeviceIds: [] }),
+    ...(membership ?? { familyId: null, inviteCode: null, inviteExpiresAt: null, role: null, memberDeviceIds: [] }),
+    inviteExpiresAt: (membership as StoredMembership | null)?.inviteExpiresAt ?? null,
     ownerDeviceId: (membership as StoredMembership | null)?.ownerDeviceId ?? null,
     ownerPublicKey: (membership as StoredMembership | null)?.ownerPublicKey ?? null,
   };
@@ -58,7 +60,7 @@ export async function persistFamilyState() {
     if (parsed?.pendingVerifiedRemoval) throw new Error('Verified removal is pending');
   }
   await FamilyLocation.saveFamilyMembership(JSON.stringify({
-    familyId: current.familyId, inviteCode: current.inviteCode,
+    familyId: current.familyId, inviteCode: current.inviteCode, inviteExpiresAt: current.inviteExpiresAt,
     role: current.role, memberDeviceIds: current.memberDeviceIds,
     ownerDeviceId: current.ownerDeviceId, ownerPublicKey: current.ownerPublicKey,
   }));
@@ -100,15 +102,22 @@ export function getOrCreateLocalFamilyState(): LocalFamilyState {
   return state;
 }
 
-export function applyCreatedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[]) {
+export function applyCreatedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[], inviteExpiresAt: number | null = null) {
   const current = getOrCreateLocalFamilyState();
-  state = { ...current, familyId, inviteCode, role: 'owner', memberDeviceIds, ownerDeviceId: null, ownerPublicKey: null };
+  state = { ...current, familyId, inviteCode, inviteExpiresAt, role: 'owner', memberDeviceIds, ownerDeviceId: null, ownerPublicKey: null };
   return state;
 }
 
 export function applyJoinedFamily(familyId: string, inviteCode: string, memberDeviceIds: string[]) {
   const current = getOrCreateLocalFamilyState();
-  state = { ...current, familyId, inviteCode: inviteCode.toUpperCase(), role: 'member', memberDeviceIds, ownerDeviceId: null, ownerPublicKey: null };
+  state = { ...current, familyId, inviteCode: null, inviteExpiresAt: null, role: 'member', memberDeviceIds, ownerDeviceId: null, ownerPublicKey: null };
+  return state;
+}
+
+export function updateInvite(familyId: string, inviteCode: string, inviteExpiresAt: number) {
+  const current = getOrCreateLocalFamilyState();
+  if (current.familyId !== familyId || current.role !== 'owner') throw new Error('Family changed');
+  state = { ...current, inviteCode, inviteExpiresAt };
   return state;
 }
 
