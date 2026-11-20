@@ -8,6 +8,16 @@ const challenges = new Map();
 const revokedMemberships = new Map();
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const code = () => Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join('');
+const newInvite = (familyId) => {
+  for (const [token, record] of invites) {
+    if (record.familyId === familyId) invites.delete(token);
+  }
+  let inviteCode = code();
+  while (invites.has(inviteCode)) inviteCode = code();
+  const expiresAt = Date.now() + 10 * 60_000;
+  invites.set(inviteCode, { familyId, expiresAt, uses: 0 });
+  return { inviteCode, expiresAt };
+};
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const read = async (req) => { const chunks = []; for await (const chunk of req) chunks.push(chunk); if (Buffer.concat(chunks).length > 32768) throw Error('Request too large'); return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); };
 const deviceIdFor = (key) => 'dev_' + createHash('sha256').update(Buffer.from(key, 'base64')).digest('hex');
@@ -35,11 +45,10 @@ http.createServer(async (req, res) => {
       const b = await read(req);
       if (!validKey(b.ownerPublicKey) || deviceIdFor(b.ownerPublicKey) !== b.ownerDeviceId) return json(res, 400, { error: 'Invalid device identity' });
       const familyId = 'fam_' + randomUUID();
-      let inviteCode = code(); while (invites.has(inviteCode)) inviteCode = code();
+      const { inviteCode, expiresAt } = newInvite(familyId);
       const family = { familyId, ownerDeviceId: b.ownerDeviceId, keyEpoch: 1, members: new Map([[b.ownerDeviceId, { publicKey: b.ownerPublicKey }]]), latest: new Map(), keyPackages: new Map(), ready: new Map() };
       families.set(familyId, family);
-      invites.set(inviteCode, { familyId, expiresAt: Date.now() + 10 * 60_000, uses: 0 });
-      return json(res, 201, { familyId, inviteCode, members: publicMembers(family) });
+      return json(res, 201, { familyId, inviteCode, expiresAt, members: publicMembers(family) });
     }
     if (req.method === 'POST' && req.url === '/v1/families/join') {
       const b = await read(req);
@@ -67,12 +76,12 @@ http.createServer(async (req, res) => {
         });
       }
       if (!family) return json(res, 404, { code: 'FAMILY_NOT_FOUND', error: 'Family not found on relay' });
-      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete', 'key-ready', 'key-status'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
+      if (!member(family, b.deviceId) || !['members', 'publish', 'snapshot', 'key-register', 'key-read', 'key-send', 'revoke', 'leave', 'dissolve', 'rotation-complete', 'key-ready', 'key-status', 'invite-create'].includes(b.action)) return json(res, 403, { error: 'Not a family member' });
       const nonce = randomUUID();
       challenges.set(nonce, { deviceId: b.deviceId, familyId: b.familyId, action: b.action, expiresAt: Date.now() + 60_000 });
       return json(res, 200, { nonce });
     }
-    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|leave|dissolve|rotation-complete|key-ready|key-status)$/);
+    const match = req.url?.match(/^\/v1\/families\/([^/]+)\/(members|locations|snapshot|key-register|key-read|key-send|revoke|leave|dissolve|rotation-complete|key-ready|key-status|invite-create)$/);
     if (!match) return json(res, 404, { error: 'Not found' });
     const family = families.get(decodeURIComponent(match[1]));
     if (!family) return json(res, 404, { error: 'Not found' });
@@ -86,6 +95,12 @@ http.createServer(async (req, res) => {
       return Buffer.concat(chunks).toString('utf8');
     })() : '';
     if (!authenticate(req, family, action, bodyText)) return json(res, 403, { error: 'Authentication failed' });
+    if (req.method === 'POST' && action === 'invite-create') {
+      if (req.headers['x-device-id'] !== family.ownerDeviceId) {
+        return json(res, 403, { error: 'Only owner can create invitations' });
+      }
+      return json(res, 200, newInvite(family.familyId));
+    }
     if (req.method === 'POST' && action === 'key-ready') {
       const b = JSON.parse(bodyText);
       if (b.epoch !== family.keyEpoch || typeof b.confirmation !== 'string' ||
