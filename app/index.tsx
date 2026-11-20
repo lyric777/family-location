@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '../modules/family-location';
-import { applyCreatedFamily, applyJoinedFamily, beginVerifiedRemoval, completeVerifiedRemoval, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
+import { applyCreatedFamily, applyJoinedFamily, beginVerifiedRemoval, completeVerifiedRemoval, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateInvite, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay, RelayHttpError } from '../src/core/transport/HttpFamilyRelay';
 import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
 import { ownerRevocationMessage, verifyOwnerRevocation, type OwnerRevocationStatement } from '../src/core/family/ownerRevocation';
@@ -49,6 +49,7 @@ export default function HomeScreen() {
   const [busy, setBusy] = useState(false);
   const [family, setFamily] = useState<LocalFamilyState>(() => getOrCreateLocalFamilyState());
   const [inviteInput, setInviteInput] = useState('');
+  const [clockNow, setClockNow] = useState(Date.now());
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingStep, setPairingStep] = useState('');
   const [pairingError, setPairingError] = useState('');
@@ -123,6 +124,7 @@ export default function HomeScreen() {
       setRevocationDiagnostic('');
       setPairingStep('');
       setPairingError('');
+      setInviteInput('');
       Alert.alert('Removed from family', 'The family owner removed this device.');
     } catch (cleanupError) {
       setKeyStatus('Removal verified - cleanup failed');
@@ -206,7 +208,7 @@ export default function HomeScreen() {
           });
       }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
-    const timer = setInterval(refresh, 2_000);
+    const timer = setInterval(() => { refresh(); setClockNow(Date.now()); }, 2_000);
     // While the UI is active, automatically deliver keys to newly joined members
     // and recover after revocation/rotation. Never run overlapping exchanges.
     const keyTimer = setInterval(async () => {
@@ -306,9 +308,31 @@ export default function HomeScreen() {
           {family.familyId ? (
             <>
               <Text style={styles.meta}>Role: {family.role?.toUpperCase()} · Family: {family.familyId}</Text>
-              {family.inviteCode ? <Text style={styles.inviteCode}>{family.inviteCode}</Text> : null}
+              {family.role === 'owner' && family.inviteCode && family.inviteExpiresAt && family.inviteExpiresAt > clockNow
+                ? <Text style={styles.inviteCode}>{family.inviteCode}</Text> : null}
+              {family.role === 'owner' ? (
+                <>
+                  <Text style={styles.hint}>{!family.inviteExpiresAt ? 'Invitation status unknown. Generate a new code.' : family.inviteExpiresAt <= clockNow ? 'Invitation expired. Generate a new code.' : 'Single-use invitation expires at ' + new Date(family.inviteExpiresAt).toLocaleTimeString() + '. It may already be used.'}</Text>
+                  <Pressable style={styles.secondaryButton} disabled={pairingBusy || !relay} onPress={async () => {
+                    if (!relay || !family.familyId) return;
+                    setPairingBusy(true);
+                    try {
+                      const id = family.familyId;
+                      const result = await relay.createInvite(id);
+                      const updated = updateInvite(id, result.inviteCode, result.expiresAt);
+                      familyRef.current = updated;
+                      setFamily(updated);
+                      await persistFamilyState();
+                    } catch (error) {
+                      Alert.alert('Cannot generate invite', error instanceof Error ? error.message : String(error));
+                    } finally { setPairingBusy(false); }
+                  }}>
+                    <Text style={styles.secondaryButtonText}>Generate invite code</Text>
+                  </Pressable>
+                </>
+              ) : null}
               <Text style={styles.hint}>
-                {family.role === 'owner' ? 'Share this code with the second device.' : 'Joined through the LAN relay.'}
+                {family.role === 'owner' ? 'Share a current code with a new device.' : 'Joined through the LAN relay.'}
               </Text>
               <Text style={styles.meta}>Family key: {keyStatus}</Text>
               {familyUnavailable ? (
@@ -331,6 +355,7 @@ export default function HomeScreen() {
                           setFamilyUnavailable(false);
                           setKeyStatus('Not checked');
                           setRevocationDiagnostic('');
+                          setInviteInput('');
                         } catch (error) {
                           Alert.alert('Local reset failed', error instanceof Error ? error.message : String(error));
                         } finally { setPairingBusy(false); }
@@ -443,7 +468,7 @@ export default function HomeScreen() {
                   try {
                     const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
                     setPairingStep('Saving family');
-                    setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId)));
+                    setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId), result.expiresAt));
                     await persistFamilyState();
                     setPairingStep('Initializing key');
                     await syncFamilyKey(result.familyId, true);
@@ -482,6 +507,7 @@ export default function HomeScreen() {
                     const result = await relay.joinFamily({ inviteCode: inviteInput.trim().toUpperCase(), deviceId: family.device.deviceId, devicePublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
                     setFamily(applyJoinedFamily(result.familyId, inviteInput, result.members.map((member) => member.deviceId)));
                     await persistFamilyState();
+                    setInviteInput('');
                     await syncFamilyKey(result.familyId, false);
                   } catch (error) {
                     Alert.alert('Cannot join family', error instanceof Error ? error.message : 'Relay error');
