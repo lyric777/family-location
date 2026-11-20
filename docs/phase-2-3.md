@@ -136,6 +136,16 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **CI and device re-test pending.** This change touches Kotlin; a new APK build is required. Do not clear the emulator's app data before re-test. Phase 2.3.2 removal acceptance remains open.
 - Follow-up: add automated native storage tests for valid checkpoint, malformed checkpoint, interrupted cleanup and restart recovery. The existing Node Relay tests do not cover Android SharedPreferences.
 
+## 2026-11-20 invitation regeneration
+
+- Device acceptance: the removed emulator displayed an Owner-removal alert and returned to the unpaired screen. The signed-removal UX passed this run; independent native key-deletion and restart checks remain pending.
+- `0fbbed4`: added Owner-only authenticated `invite-create` endpoint. Generating a code invalidates earlier invitations for the same family; new codes expire after 10 minutes and allow one successful join. The family ID and existing membership remain unchanged.
+- `7dfba15`, `16fd0b3`: added typed Relay client method and initial invite expiration response.
+- `d2ef379`, `6680cf8`: store invitation expiration, display the Owner's regeneration button and expiry information, and clear the joining device's old invite input. Member screens no longer display an old invite as a usable code.
+- `91777bf`: test Owner-only code rotation, invalidated old code and successful new-code join.
+- **Pending:** confirm latest CI and test with two Android devices. Relay state and invitations are still in memory and disappear on restart. The UI cannot currently know immediately when a code is consumed, so it may display a code that has already been used until expiration; a server-backed invitation-status endpoint would improve this.
+- README unchanged. Phase 2.3.2 remains pending full acceptance.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
