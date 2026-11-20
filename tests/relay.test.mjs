@@ -56,7 +56,17 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
 
   assert.equal((await authorized(base, stranger, familyId, 'members', path('members'))).status, 403);
   assert.equal((await authorized(base, owner, familyId, 'members', path('members'))).status, 200);
-  assert.equal((await request(base, '/v1/families/join', 'POST', { inviteCode, deviceId: member.deviceId, devicePublicKey: member.publicKey })).status, 200);
+  const invitePath = path('invite-create');
+  assert.equal((await authorized(base, stranger, familyId, 'invite-create', invitePath, 'POST', {})).status, 403);
+  const rotated = await authorized(base, owner, familyId, 'invite-create', invitePath, 'POST', {});
+  assert.equal(rotated.status, 200);
+  assert.equal(rotated.data.inviteCode.length, 6);
+  assert.ok(rotated.data.expiresAt > Date.now());
+  assert.equal((await request(base, '/v1/families/join', 'POST',
+    { inviteCode, deviceId: member.deviceId, devicePublicKey: member.publicKey })).status, 404);
+  assert.equal((await authorized(base, owner, familyId, 'members', path('members'))).status, 200);
+  assert.equal((await request(base, '/v1/families/join', 'POST',
+    { inviteCode: rotated.data.inviteCode, deviceId: member.deviceId, devicePublicKey: member.publicKey })).status, 200);
   assert.equal((await request(base, '/v1/families/join', 'POST', { inviteCode, deviceId: stranger.deviceId, devicePublicKey: stranger.publicKey })).status, 404);
 
   // A signature is bound to method, path and exact request body.
