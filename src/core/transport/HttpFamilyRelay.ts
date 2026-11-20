@@ -64,11 +64,18 @@ export class HttpFamilyRelay {
     return this.request<CreateFamilyResponse & { members: RelayMember[] }>('/v1/families', { method: 'POST', body: JSON.stringify(request) });
   }
 
+  createInvite(familyId: string) {
+    return this.authorized<{ inviteCode: string; expiresAt: number }>(
+      familyId, 'invite-create', '/v1/families/' + encodeURIComponent(familyId) + '/invite-create',
+      { method: 'POST', body: '{}' },
+    );
+  }
+
   joinFamily(request: JoinFamilyRequest) {
     return this.request<JoinFamilyResponse>('/v1/families/join', { method: 'POST', body: JSON.stringify(request) });
   }
 
-  private async authorized<T>(familyId: string, action: 'members' | 'publish' | 'snapshot' | 'key-register' | 'key-read' | 'key-send' | 'rotation-complete' | 'revoke' | 'leave' | 'dissolve' | 'key-ready' | 'key-status', path: string, init?: RequestInit): Promise<T> {
+  private async authorized<T>(familyId: string, action: 'members' | 'publish' | 'snapshot' | 'key-register' | 'key-read' | 'key-send' | 'rotation-complete' | 'revoke' | 'leave' | 'dissolve' | 'key-ready' | 'key-status' | 'invite-create', path: string, init?: RequestInit): Promise<T> {
     const identity = await FamilyLocation.getDeviceIdentity();
     const { nonce } = await this.request<{ nonce: string }>('/v1/auth/challenge', {
       method: 'POST',
