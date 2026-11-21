@@ -467,8 +467,15 @@ export default function HomeScreen() {
                   setPairingStep('Connecting to relay');
                   try {
                     const result = await relay.createFamily({ ownerDeviceId: family.device.deviceId, ownerPublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
+                    if (!result.inviteCode || !Number.isFinite(result.expiresAt) ||
+                        result.expiresAt <= Date.now()) {
+                      throw new Error('Relay did not return a valid initial invitation');
+                    }
                     setPairingStep('Saving family');
-                    setFamily(applyCreatedFamily(result.familyId, result.inviteCode, result.members.map((member) => member.deviceId), result.expiresAt));
+                    const created = applyCreatedFamily(result.familyId, result.inviteCode,
+                      result.members.map((member) => member.deviceId), result.expiresAt);
+                    familyRef.current = created;
+                    setFamily(created);
                     await persistFamilyState();
                     setPairingStep('Initializing key');
                     await syncFamilyKey(result.familyId, true);
