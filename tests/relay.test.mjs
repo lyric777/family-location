@@ -51,7 +51,9 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   const owner = identity(), member = identity(), stranger = identity();
   const created = await request(base, '/v1/families', 'POST', { ownerDeviceId: owner.deviceId, ownerPublicKey: owner.publicKey });
   assert.equal(created.status, 201);
-  const { familyId, inviteCode } = created.data;
+  const { familyId, inviteCode, expiresAt } = created.data;
+  assert.match(inviteCode, /^[A-HJ-NP-Z2-9]{6}$/);
+  assert.ok(Number.isFinite(expiresAt) && expiresAt > Date.now(), 'create family must immediately return a valid invitation');
   const path = suffix => '/v1/families/' + encodeURIComponent(familyId) + '/' + suffix;
 
   assert.equal((await authorized(base, stranger, familyId, 'members', path('members'))).status, 403);
