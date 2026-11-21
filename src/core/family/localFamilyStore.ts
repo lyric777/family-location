@@ -98,7 +98,7 @@ export async function clearPersistedFamily() {
 }
 
 export function getOrCreateLocalFamilyState(): LocalFamilyState {
-  if (!state) state = { device: { deviceId: makeId('dev'), displayName: 'This phone', createdAtMs: Date.now() }, familyId: null, inviteCode: null, role: null, memberDeviceIds: [], ownerDeviceId: null, ownerPublicKey: null };
+  if (!state) state = { device: { deviceId: makeId('dev'), displayName: 'This phone', createdAtMs: Date.now() }, familyId: null, inviteCode: null, inviteExpiresAt: null, role: null, memberDeviceIds: [], ownerDeviceId: null, ownerPublicKey: null };
   return state;
 }
 
