@@ -116,6 +116,17 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   assert.equal((await authorized(base, owner, familyId, 'key-status', path('key-status'))).data.allReady, false);
   assert.equal((await authorized(base, owner, familyId, 'key-ready', path('key-ready'), 'POST', { epoch: 1, confirmation: confirm })).status, 400);
   assert.equal((await authorized(base, owner, familyId, 'rotation-complete', path('rotation-complete'), 'POST', { epoch: 2 })).status, 200);
-  assert.equal((await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST', {})).status, 200);
-  assert.equal((await authorized(base, owner, familyId, 'members', path('members'))).status, 404);
+  const dissolution = { version: 1, action: 'dissolve', familyId,
+    ownerDeviceId: owner.deviceId, keyEpoch: 2 };
+  const dissolutionMessage = JSON.stringify(['family-dissolution-v1', familyId, owner.deviceId, 2]);
+  const badDissolve = await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
+    { statement: dissolution, signature: sign('sha256', Buffer.from(dissolutionMessage), stranger.privateKey).toString('base64') });
+  assert.equal(badDissolve.status, 403);
+  const dissolutionSignature = sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64');
+  assert.equal((await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
+    { statement: dissolution, signature: dissolutionSignature })).status, 200);
+  const dissolved = await authorized(base, owner, familyId, 'members', path('members'));
+  assert.equal(dissolved.status, 410);
+  assert.equal(dissolved.data.code, 'FAMILY_DISSOLVED');
+  assert.deepEqual(dissolved.data.dissolution, { statement: dissolution, signature: dissolutionSignature });
 });
