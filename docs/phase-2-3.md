@@ -153,6 +153,15 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - `0bd0e84`: clear the revocation guard, stale diagnostic and missing-family indicator **only after** the Relay accepts a new join. The key synchronization then proceeds normally. An unsuccessful join cannot clear the revocation guard.
 - **Pending:** latest CI and OPPO/emulator acceptance for remove -> new invite -> same-device rejoin -> both Ready. No new native build is required for this TypeScript-only change, but a fresh Release APK is needed to deliver it. README unchanged.
 
+## 2026-11-23 signed family dissolution (pending acceptance)
+
+- `b2897fd`: Relay now requires a signed Owner dissolution statement bound to family ID, Owner identity, and current key epoch. It retains signed dissolution evidence after deleting the active family.
+- `e0b0d74`, `5c3b7a0`: Relay client sends signed dissolution and exposes evidence from the error response.
+- `bd2b8d9`: Member verifies the statement against the locally pinned Owner public key and key epoch, then uses the existing durable verified-removal cleanup path. On success it shows `Family dissolved` and returns to the unpaired screen.
+- `8bf991c`: Relay test rejects forged dissolution and checks delivery of signed evidence after dissolution.
+- **Not yet accepted:** CI and OPPO/emulator tests are pending. Verify active and restart behavior, malformed evidence, and cleanup recovery. Relay retains dissolution evidence only in memory; restarting it loses this proof and falls back to the existing missing-family local reset path. A future durable relay store is required for reliable delivery across restarts.
+- The development LAN Relay is not suitable for real family location data. README unchanged.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
