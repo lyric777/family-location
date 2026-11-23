@@ -96,6 +96,42 @@ export default function HomeScreen() {
     return verified;
   };
 
+  const handleDissolution = async (error: unknown, current: LocalFamilyState) => {
+    if (!(error instanceof RelayHttpError) || error.code !== 'FAMILY_DISSOLVED' ||
+        !error.dissolution || !current.familyId || current.role !== 'member') return false;
+    const latest = getOrCreateLocalFamilyState();
+    if (latest.familyId !== current.familyId || !latest.ownerPublicKey || !latest.ownerDeviceId) return false;
+    const { statement, signature } = error.dissolution;
+    if (statement.version !== 1 || statement.action !== 'dissolve' ||
+        statement.familyId !== latest.familyId || statement.ownerDeviceId !== latest.ownerDeviceId ||
+        !Number.isSafeInteger(statement.keyEpoch)) return false;
+    const localEpoch = await FamilyLocation.getFamilyKeyEpoch(latest.familyId);
+    if (statement.keyEpoch < localEpoch) return false;
+    const fingerprint = await FamilyLocation.sha256HexBase64(latest.ownerPublicKey);
+    if ('dev_' + fingerprint !== latest.ownerDeviceId) return false;
+    const message = JSON.stringify(['family-dissolution-v1', statement.familyId,
+      statement.ownerDeviceId, statement.keyEpoch]);
+    const valid = await FamilyLocation.verifyIdentitySignature(latest.ownerPublicKey, message, signature);
+    if (!valid || familyRef.current.familyId !== latest.familyId || cleanupInFlight.current) return valid;
+    cleanupInFlight.current = true;
+    revokedFamilyRef.current = latest.familyId;
+    try {
+      await beginVerifiedRemoval(latest.familyId);
+      const cleared = await completeVerifiedRemoval(latest.familyId);
+      familyRef.current = cleared;
+      setFamily(cleared);
+      setKeyStatus('Not checked');
+      setFamilyUnavailable(false);
+      setRevocationDiagnostic('');
+      setInviteInput('');
+      Alert.alert('Family dissolved', 'The owner dissolved this family.');
+    } catch (cleanupError) {
+      setKeyStatus('Dissolution verified - cleanup failed');
+      console.warn('[Family] dissolution cleanup failed', cleanupError);
+    } finally { cleanupInFlight.current = false; }
+    return true;
+  };
+
   const markMissingFamily = (error: unknown, familyId: string) => {
     if (!(error instanceof RelayHttpError) || error.code !== 'FAMILY_NOT_FOUND' ||
         familyRef.current.familyId !== familyId) return false;
@@ -154,6 +190,8 @@ export default function HomeScreen() {
         if (await handleVerifiedRemoval(error, current)) return;
         revokedFamilyRef.current = familyId;
         setKeyStatus('Access revoked - verification required');
+      } else if (await handleDissolution(error, current)) {
+        return;
       } else if (markMissingFamily(error, familyId)) {
         return;
       } else if (revokedFamilyRef.current !== familyId && !cleanupInFlight.current) {
@@ -204,7 +242,7 @@ export default function HomeScreen() {
               if (await handleVerifiedRemoval(error, loaded)) return;
               revokedFamilyRef.current = loaded.familyId;
               setKeyStatus('Access revoked - verification required');
-            } else if (!markMissingFamily(error, loaded.familyId!)) setKeyStatus('Retry required');
+            } else if (!(await handleDissolution(error, loaded)) && !markMissingFamily(error, loaded.familyId!)) setKeyStatus('Retry required');
           });
       }
     }).catch((error) => Alert.alert('Device identity error', String(error)));
@@ -235,7 +273,7 @@ export default function HomeScreen() {
               revokedFamilyRef.current = current.familyId;
               setKeyStatus('Access revoked - verification required');
             }
-          } else if (!markMissingFamily(error, current.familyId) && revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) setKeyStatus('Retrying');
+          } else if (!(await handleDissolution(error, current)) && !markMissingFamily(error, current.familyId) && revokedFamilyRef.current !== current.familyId && !cleanupInFlight.current) setKeyStatus('Retrying');
         }
       } finally {
         syncInFlight.current = false;
@@ -435,7 +473,14 @@ export default function HomeScreen() {
                     { text: isOwner ? 'Dissolve' : 'Leave', style: 'destructive', onPress: async () => {
                       setPairingBusy(true);
                       try {
-                        if (isOwner) await relay.dissolveFamily(familyId);
+                        if (isOwner) {
+                          const exchange = await relay.getKeyExchange(familyId);
+                          const statement = { version: 1 as const, action: 'dissolve' as const,
+                            familyId, ownerDeviceId: family.device.deviceId, keyEpoch: exchange.keyEpoch };
+                          const signature = await FamilyLocation.signIdentityChallenge(
+                            JSON.stringify(['family-dissolution-v1', familyId, statement.ownerDeviceId, statement.keyEpoch]));
+                          await relay.dissolveFamily(familyId, statement, signature);
+                        }
                         else await relay.leaveFamily(familyId);
                         await FamilyLocation.stop();
                         await FamilyLocation.deleteFamilyKey(familyId);
