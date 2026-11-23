@@ -75,7 +75,7 @@ export class HttpFamilyRelay {
   createInvite(familyId: string) {
     return this.authorized<{ inviteCode: string; expiresAt: number }>(
       familyId, 'invite-create', '/v1/families/' + encodeURIComponent(familyId) + '/invite-create',
-      { method: 'POST', body: JSON.stringify({ statement, signature }) },
+      { method: 'POST', body: '{}' },
     );
   }
 
@@ -133,7 +133,7 @@ export class HttpFamilyRelay {
 
   dissolveFamily(familyId: string, statement: RelayDissolutionEvidence['statement'], signature: string) {
     return this.authorized<{ ok: boolean }>(familyId, 'dissolve', '/v1/families/' + encodeURIComponent(familyId) + '/dissolve', {
-      method: 'POST', body: '{}',
+      method: 'POST', body: JSON.stringify({ statement, signature }),
     });
   }
 
