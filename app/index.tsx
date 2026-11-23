@@ -512,6 +512,12 @@ export default function HomeScreen() {
                   setPairingBusy(true);
                   try {
                     const result = await relay.joinFamily({ inviteCode: inviteInput.trim().toUpperCase(), deviceId: family.device.deviceId, devicePublicKey: (await FamilyLocation.getDeviceIdentity()).publicKey });
+                    // A previously revoked device may rejoin the same family with a new invite.
+                    // Clear the session-only revocation guard only after the relay accepts the join.
+                    revokedFamilyRef.current = null;
+                    setRevocationDiagnostic('');
+                    setFamilyUnavailable(false);
+                    setKeyStatus('Synchronizing');
                     setFamily(applyJoinedFamily(result.familyId, inviteInput, result.members.map((member) => member.deviceId)));
                     await persistFamilyState();
                     setInviteInput('');
