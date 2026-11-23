@@ -6,6 +6,10 @@ import type { OwnerRevocationStatement } from '../family/ownerRevocation';
 export type RelayMember = { deviceId: string; publicKey: string };
 export type RelayFamily = { familyId: string; members: RelayMember[] };
 
+export type RelayDissolutionEvidence = {
+  statement: { version: 1; action: 'dissolve'; familyId: string; ownerDeviceId: string; keyEpoch: number };
+  signature: string;
+};
 export type RelayRevocationEvidence = { statement: OwnerRevocationStatement; signature: string };
 
 export class RelayHttpError extends Error {
@@ -15,6 +19,7 @@ export class RelayHttpError extends Error {
     readonly requestPath: string,
     message: string,
     readonly revocation: RelayRevocationEvidence | null = null,
+    readonly dissolution: RelayDissolutionEvidence | null = null,
   ) {
     super(message);
     this.name = 'RelayHttpError';
@@ -48,6 +53,9 @@ export class HttpFamilyRelay {
           typeof body.revocation.signature === 'string' && body.revocation.statement &&
           typeof body.revocation.statement === 'object'
           ? body.revocation as RelayRevocationEvidence : null,
+        body.dissolution && typeof body.dissolution.signature === 'string' &&
+          body.dissolution.statement && typeof body.dissolution.statement === 'object'
+          ? body.dissolution as RelayDissolutionEvidence : null,
       );
       return body as T;
     } catch (error) {
@@ -67,7 +75,7 @@ export class HttpFamilyRelay {
   createInvite(familyId: string) {
     return this.authorized<{ inviteCode: string; expiresAt: number }>(
       familyId, 'invite-create', '/v1/families/' + encodeURIComponent(familyId) + '/invite-create',
-      { method: 'POST', body: '{}' },
+      { method: 'POST', body: JSON.stringify({ statement, signature }) },
     );
   }
 
@@ -123,7 +131,7 @@ export class HttpFamilyRelay {
     });
   }
 
-  dissolveFamily(familyId: string) {
+  dissolveFamily(familyId: string, statement: RelayDissolutionEvidence['statement'], signature: string) {
     return this.authorized<{ ok: boolean }>(familyId, 'dissolve', '/v1/families/' + encodeURIComponent(familyId) + '/dissolve', {
       method: 'POST', body: '{}',
     });
