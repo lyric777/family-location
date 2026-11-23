@@ -6,6 +6,7 @@ const families = new Map();
 const invites = new Map();
 const challenges = new Map();
 const revokedMemberships = new Map();
+const dissolvedFamilies = new Map();
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const code = () => Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join('');
 const newInvite = (familyId) => {
@@ -66,6 +67,11 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/v1/auth/challenge') {
       const b = await read(req);
       const family = families.get(b.familyId);
+      const dissolution = dissolvedFamilies.get(String(b.familyId));
+      if (!family && dissolution) return json(res, 410, {
+        code: 'FAMILY_DISSOLVED', error: 'Family dissolved by owner',
+        dissolution,
+      });
       const revocation = revokedMemberships.get(String(b.familyId) + ':' + String(b.deviceId));
       if (revocation) {
         return json(res, 403, {
@@ -165,6 +171,23 @@ http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && action === 'dissolve') {
       if (req.headers['x-device-id'] !== family.ownerDeviceId) return json(res, 403, { error: 'Owner required' });
+      const b = JSON.parse(bodyText);
+      const statement = b.statement;
+      if (!statement || statement.version !== 1 || statement.action !== 'dissolve' ||
+          statement.familyId !== family.familyId ||
+          statement.ownerDeviceId !== family.ownerDeviceId ||
+          statement.keyEpoch !== family.keyEpoch ||
+          typeof b.signature !== 'string') return json(res, 400, { error: 'Invalid dissolution statement' });
+      const message = JSON.stringify(['family-dissolution-v1', statement.familyId,
+        statement.ownerDeviceId, statement.keyEpoch]);
+      let verified = false;
+      try {
+        verified = verify('sha256', Buffer.from(message),
+          createPublicKey({ key: Buffer.from(family.members.get(family.ownerDeviceId).publicKey, 'base64'),
+            format: 'der', type: 'spki' }), Buffer.from(b.signature, 'base64'));
+      } catch {}
+      if (!verified) return json(res, 403, { error: 'Invalid owner dissolution signature' });
+      dissolvedFamilies.set(family.familyId, { statement, signature: b.signature });
       families.delete(family.familyId);
       for (const [inviteCode, invite] of invites) {
         if (invite.familyId === family.familyId) invites.delete(inviteCode);
