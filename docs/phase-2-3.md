@@ -146,6 +146,13 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Pending:** confirm latest CI and test with two Android devices. Relay state and invitations are still in memory and disappear on restart. The UI cannot currently know immediately when a code is consumed, so it may display a code that has already been used until expiration; a server-backed invitation-status endpoint would improve this.
 - README unchanged. Phase 2.3.2 remains pending full acceptance.
 
+## 2026-11-23 same-family rejoin regression
+
+- Device test: after Owner removal and a successful new invite join, the emulator showed `Role: MEMBER`, `Members: 2`, but `Family key: Not checked` while the Owner appeared Ready.
+- Root cause: `revokedFamilyRef` is a session-local guard keyed by family ID. It remained set after verified removal and blocked `syncFamilyKey` when the same device joined the same family again.
+- `0bd0e84`: clear the revocation guard, stale diagnostic and missing-family indicator **only after** the Relay accepts a new join. The key synchronization then proceeds normally. An unsuccessful join cannot clear the revocation guard.
+- **Pending:** latest CI and OPPO/emulator acceptance for remove -> new invite -> same-device rejoin -> both Ready. No new native build is required for this TypeScript-only change, but a fresh Release APK is needed to deliver it. README unchanged.
+
 ## Phase 2.2 acceptance (user reported PASS)
 
 OPPO physical Android phone created a family, emulator joined via the LAN relay, and both displayed two members. Six-character invitation generation and development HTTP cleartext access were fixed. This acceptance predates the new Phase 2.3 authentication protocol; it does **not** validate the current main branch.
