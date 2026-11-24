@@ -122,6 +122,19 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   const badDissolve = await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
     { statement: dissolution, signature: sign('sha256', Buffer.from(dissolutionMessage), stranger.privateKey).toString('base64') });
   assert.equal(badDissolve.status, 403);
+  const wrongDissolutionFamily = await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
+    { statement: { ...dissolution, familyId: 'fam_wrong' },
+      signature: sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64') });
+  assert.equal(wrongDissolutionFamily.status, 400);
+  const wrongDissolutionEpoch = await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
+    { statement: { ...dissolution, keyEpoch: 1 },
+      signature: sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64') });
+  assert.equal(wrongDissolutionEpoch.status, 400);
+  const wrongDissolutionOwner = await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
+    { statement: { ...dissolution, ownerDeviceId: stranger.deviceId },
+      signature: sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64') });
+  assert.equal(wrongDissolutionOwner.status, 400);
+  assert.equal((await authorized(base, member, familyId, 'members', path('members'))).status, 200);
   const dissolutionSignature = sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64');
   assert.equal((await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
     { statement: dissolution, signature: dissolutionSignature })).status, 200);
@@ -129,4 +142,10 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   assert.equal(dissolved.status, 410);
   assert.equal(dissolved.data.code, 'FAMILY_DISSOLVED');
   assert.deepEqual(dissolved.data.dissolution, { statement: dissolution, signature: dissolutionSignature });
+  const proof = dissolved.data.dissolution;
+  assert.equal(verify('sha256', Buffer.from(JSON.stringify(['family-dissolution-v1',
+    proof.statement.familyId, proof.statement.ownerDeviceId, proof.statement.keyEpoch])),
+    owner.publicKey ? createPublicKey({ key: Buffer.from(owner.publicKey, 'base64'), format: 'der', type: 'spki' }) : null,
+    Buffer.from(proof.signature, 'base64')), true);
+  assert.equal((await authorized(base, member, familyId, 'key-read', path('key-read'))).data.code, 'FAMILY_DISSOLVED');
 });
