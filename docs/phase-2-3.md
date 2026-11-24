@@ -2,6 +2,30 @@
 
 Updated: 2026-10-31. This document captures Phase 2.3 requirements and the original acceptance plan. For the **latest observed device results, current blocking issue, precise next steps, and environment setup**, read [Project handoff — 2026-10-31](project-handoff-2026-10-31.md). The handoff supersedes the older status table below where they differ; no full 2.3.2 acceptance has been granted.
 
+## 2026-11-24 Phase 2.3.2 two-device acceptance closeout
+
+**Scope:** OPPO physical Android phone (Owner), Android emulator (Member), development LAN Relay. Acceptance observations reported from interactive device testing; these are not independent cryptographic or persistent-storage audits.
+
+**Observed PASS (functional):**
+- Owner creates a family and receives an invitation; Member joins and both report Family key Ready.
+- Owner generates a replacement single-use invitation without dissolving the family.
+- Owner removes Member; Member verifies signed revocation, shows removal alert and exits.
+- Removed Member joins the same family again using a new invitation; both return to Ready.
+- Member voluntarily leaves the family.
+- Owner dissolves the family; after restarting the Relay with the new protocol, Member automatically receives the signed dissolution, shows the dissolution alert and exits.
+- If the development Relay loses a family, both devices can use the explicit local reset flow.
+
+**Not yet independently accepted:**
+- Reopen/reboot after revoke, leave, and dissolve: old family must not reappear.
+- Verify Android Keystore family-key deletion at the native level, including failed/partial cleanup and restart recovery.
+- Relay persistence across process restarts: currently volatile; signed dissolution evidence also disappears on restart.
+- Long-running/background location synchronization, peer decryption, and security review belong to later Phase 2.3 work.
+- Security-negative tests are partial; CI protocol tests do not replace native/device verification.
+
+**Acceptance decision:** Phase 2.3.2 interactive family-management flows **PASS within the above two-device test scope**. This is **not** an acceptance of all Phase 2.3, release readiness, or real-world location sharing. The older historical status tables below are retained as dated snapshots and should not override this newer closeout.
+
+**Next work:** complete native restart/key-erasure acceptance, address Relay durability separately, then proceed to Phase 2.3.3 encrypted location synchronization. No README changes.
+
 ## Confirmed product decisions
 
 - Android-first, React Native UI and native Android foreground location service; no GMS dependency for core location or cryptography.
