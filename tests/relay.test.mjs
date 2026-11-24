@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes, sign, verify, createPublicKey } from 'node:crypto';
 import net from 'node:net';
 
 function identity() {
@@ -145,7 +145,7 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
   const proof = dissolved.data.dissolution;
   assert.equal(verify('sha256', Buffer.from(JSON.stringify(['family-dissolution-v1',
     proof.statement.familyId, proof.statement.ownerDeviceId, proof.statement.keyEpoch])),
-    owner.publicKey ? createPublicKey({ key: Buffer.from(owner.publicKey, 'base64'), format: 'der', type: 'spki' }) : null,
+    createPublicKey({ key: Buffer.from(owner.publicKey, 'base64'), format: 'der', type: 'spki' }),
     Buffer.from(proof.signature, 'base64')), true);
   assert.equal((await authorized(base, member, familyId, 'key-read', path('key-read'))).data.code, 'FAMILY_DISSOLVED');
 });
