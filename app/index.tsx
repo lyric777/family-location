@@ -17,6 +17,7 @@ import FamilyLocation, { type LocationMode, type NativeLocationSnapshot } from '
 import { applyCreatedFamily, applyJoinedFamily, beginVerifiedRemoval, completeVerifiedRemoval, clearPersistedFamily, getOrCreateLocalFamilyState, initializeFamilyState, persistFamilyState, updateInvite, updateMembers, type LocalFamilyState } from '../src/core/family/localFamilyStore';
 import { getConfiguredRelay, RelayHttpError } from '../src/core/transport/HttpFamilyRelay';
 import { provisionFamilyKey } from '../src/core/family/keyProvisioning';
+import { publishCurrentLocation, readFamilyLocations } from '../src/core/family/locationSync';
 import { ownerRevocationMessage, verifyOwnerRevocation, type OwnerRevocationStatement } from '../src/core/family/ownerRevocation';
 
 const MODES: LocationMode[] = ['IDLE', 'MOVING', 'LIVE'];
@@ -55,6 +56,8 @@ export default function HomeScreen() {
   const [pairingError, setPairingError] = useState('');
   const [identityReady, setIdentityReady] = useState(false);
   const [keyStatus, setKeyStatus] = useState('Not checked');
+  const [locationSyncStatus, setLocationSyncStatus] = useState('Not started');
+  const [peerLocations, setPeerLocations] = useState<Array<{ deviceId: string; latitude: number; longitude: number; timestampMs: number }>>([]);
   const [revocationDiagnostic, setRevocationDiagnostic] = useState('');
   const [familyUnavailable, setFamilyUnavailable] = useState(false);
   const relay = getConfiguredRelay();
@@ -409,6 +412,42 @@ export default function HomeScreen() {
               <Pressable style={styles.secondaryButton} onPress={() => syncFamilyKey(family.familyId!, family.role === 'owner')}>
                 <Text style={styles.secondaryButtonText}>Sync family key</Text>
               </Pressable>
+              <Text style={styles.meta}>Encrypted location sync (foreground test): {locationSyncStatus}</Text>
+              <Pressable style={styles.secondaryButton} disabled={pairingBusy || keyStatus !== 'Ready' || !relay}
+                onPress={async () => {
+                  if (!relay || !family.familyId) return;
+                  setLocationSyncStatus('Publishing');
+                  try {
+                    await publishCurrentLocation(relay, family.familyId, FamilyLocation.getSnapshot());
+                    setLocationSyncStatus('Published encrypted location');
+                  } catch (error) {
+                    setLocationSyncStatus(error instanceof Error ? error.message : String(error));
+                  }
+                }}>
+                <Text style={styles.secondaryButtonText}>Publish my location (test)</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} disabled={pairingBusy || keyStatus !== 'Ready' || !relay}
+                onPress={async () => {
+                  if (!relay || !family.familyId) return;
+                  setLocationSyncStatus('Reading');
+                  try {
+                    const locations = await readFamilyLocations(relay, family.familyId);
+                    setPeerLocations(locations.filter(item => item.deviceId !== family.device.deviceId)
+                      .map(item => ({ deviceId: item.deviceId, latitude: item.location.latitude,
+                        longitude: item.location.longitude, timestampMs: item.location.timestampMs })));
+                    setLocationSyncStatus('Read ' + locations.length + ' encrypted location(s)');
+                  } catch (error) {
+                    setLocationSyncStatus(error instanceof Error ? error.message : String(error));
+                  }
+                }}>
+                <Text style={styles.secondaryButtonText}>Read family locations (test)</Text>
+              </Pressable>
+              {peerLocations.map(item => (
+                <Text key={item.deviceId} selectable style={styles.hint}>
+                  {item.deviceId.slice(0, 16)}: {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
+                  {' · '}{new Date(item.timestampMs).toLocaleTimeString()}
+                </Text>
+              ))}
               <Text style={styles.meta}>Members: {family.memberDeviceIds.length}</Text>
               {family.memberDeviceIds.map((id) => (
                 <View key={id} style={styles.memberRow}>
