@@ -26,6 +26,13 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 
 **Next work:** complete native restart/key-erasure acceptance, address Relay durability separately, then proceed to Phase 2.3.3 encrypted location synchronization. No README changes.
 
+## 2026-11-25 Phase 2.3.3 kickoff — foreground encrypted location prototype
+
+- `a470fc6`: added `locationSync.ts` for manual encrypted publishing and retrieval. Location JSON is AES-GCM encrypted through the existing native family-key API, with family, sender, message ID and timestamp bound as authenticated additional data. The Relay receives an encrypted envelope, not plaintext coordinates.
+- `c7f4a16`: added two foreground-only test buttons: `Publish my location (test)` and `Read family locations (test)`. The latter displays decrypted peer coordinates without a map. These are diagnostic controls, not final product UI.
+- **Not yet accepted:** CI and OPPO/emulator tests pending. The user must have an actual location fix and both devices must be Ready. No automatic background upload, download polling, stale-data expiry policy, replay defense across restarts, or durable Relay storage is implemented here.
+- This is only the first Phase 2.3.3 slice. Do not share real sensitive family positions over the current development LAN Relay; the HTTP transport is not production-secure even though payloads are encrypted.
+
 ## Confirmed product decisions
 
 - Android-first, React Native UI and native Android foreground location service; no GMS dependency for core location or cryptography.
