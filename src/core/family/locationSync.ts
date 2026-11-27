@@ -26,6 +26,7 @@ export async function publishCurrentLocation(relay: HttpFamilyRelay, familyId: s
     mode: snapshot.mode.toLowerCase() as LocationPayload['mode'],
   };
   if (!validPosition(payload)) throw new Error('Invalid location fix');
+  if (Math.abs(Date.now() - payload.timestampMs) > 5 * 60_000) throw new Error('Location fix is stale');
   const identity = await FamilyLocation.getDeviceIdentity();
   const envelopeBase = {
     version: 1 as const, familyId, senderDeviceId: identity.deviceId,
@@ -47,7 +48,8 @@ export async function readFamilyLocations(relay: HttpFamilyRelay, familyId: stri
     try {
       const plaintext = await FamilyLocation.decryptFamilyPayload(familyId, e.nonce, e.ciphertext, aadFor(e));
       const location = JSON.parse(plaintext) as LocationPayload;
-      if (validPosition(location) && location.timestampMs <= e.sentAtMs + 60_000) {
+      if (validPosition(location) && Math.abs(e.sentAtMs - location.timestampMs) <= 60_000 &&
+          e.sentAtMs <= Date.now() + 60_000 && Date.now() - e.sentAtMs <= 5 * 60_000) {
         result.push({ deviceId: e.senderDeviceId, location });
       }
     } catch {
