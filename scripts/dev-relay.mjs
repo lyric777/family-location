@@ -248,7 +248,7 @@ http.createServer(async (req, res) => {
       if (family.rotationRequired) return json(res, 409, { error: 'Key rotation required' });
       const b = JSON.parse(bodyText);
       const e = b.envelope;
-      if (!e || e.version !== 1 || e.kind !== 'location' || e.familyId !== family.familyId || e.senderDeviceId !== req.headers['x-device-id'] || typeof e.ciphertext !== 'string' || typeof e.nonce !== 'string' || !Number.isFinite(e.sentAtMs)) return json(res, 400, { error: 'Invalid envelope' });
+      if (!e || e.version !== 1 || e.kind !== 'location' || e.familyId !== family.familyId || e.senderDeviceId !== req.headers['x-device-id'] || typeof e.messageId !== 'string' || e.messageId.length < 1 || e.messageId.length > 128 || typeof e.ciphertext !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(e.ciphertext) || e.ciphertext.length < 24 || e.ciphertext.length > 8192 || typeof e.nonce !== 'string' || !/^[A-Za-z0-9+/]{16}$/.test(e.nonce) || !Number.isSafeInteger(e.sentAtMs) || e.sentAtMs > Date.now() + 60_000 || Date.now() - e.sentAtMs > 5 * 60_000) return json(res, 400, { error: 'Invalid envelope' });
       const previous = family.latest.get(e.senderDeviceId);
       if (previous && e.sentAtMs <= previous.envelope.sentAtMs) return json(res, 409, { error: 'Stale location' });
       family.latest.set(e.senderDeviceId, { deviceId: e.senderDeviceId, envelope: e, receivedAtMs: Date.now() });
