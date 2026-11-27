@@ -33,6 +33,14 @@ Updated: 2026-10-31. This document captures Phase 2.3 requirements and the origi
 - **Not yet accepted:** CI and OPPO/emulator tests pending. The user must have an actual location fix and both devices must be Ready. No automatic background upload, download polling, stale-data expiry policy, replay defense across restarts, or durable Relay storage is implemented here.
 - This is only the first Phase 2.3.3 slice. Do not share real sensitive family positions over the current development LAN Relay; the HTTP transport is not production-secure even though payloads are encrypted.
 
+## 2026-11-27 Phase 2.3.3 security review and automated tests
+
+- Review found missing freshness bounds on location fixes and decrypted snapshots. `a72ef4f` rejects stale local fixes and old/future encrypted snapshots.
+- `f66a5c3` tightens Relay envelope shape, ciphertext/nonce formatting, timestamp and size checks. This is syntactic validation; the Relay **cannot** verify AES-GCM tags or encrypted contents.
+- `38348f4`, `f1504aa`: new `tests/location.test.mjs` runs in `npm run test:relay`, covering authorized encrypted publication, replay/stale timestamp rejection, sender/family mismatch, malformed nonce, outsider denial, member leave and rotation gating.
+- **Important gaps:** no automated native AES-GCM tamper/wrong-key tests yet; those require Android/native test coverage. Relay remains HTTP and in-memory. Manual foreground exchange has not been device-accepted. No background location synchronization is implemented. CI is pending.
+- The Relay still cannot authenticate the *contents* of a location envelope; the receiver must verify AES-GCM integrity and sender metadata. Do not treat these Node tests as proof of end-to-end confidentiality.
+
 ## Confirmed product decisions
 
 - Android-first, React Native UI and native Android foreground location service; no GMS dependency for core location or cryptography.
