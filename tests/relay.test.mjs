@@ -134,7 +134,7 @@ test('relay authentication, readiness, revocation and key epoch', async t => {
     { statement: { ...dissolution, ownerDeviceId: stranger.deviceId },
       signature: sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64') });
   assert.equal(wrongDissolutionOwner.status, 400);
-  assert.equal((await authorized(base, member, familyId, 'members', path('members'))).status, 200);
+  assert.equal((await authorized(base, owner, familyId, 'members', path('members'))).status, 200);
   const dissolutionSignature = sign('sha256', Buffer.from(dissolutionMessage), owner.privateKey).toString('base64');
   assert.equal((await authorized(base, owner, familyId, 'dissolve', path('dissolve'), 'POST',
     { statement: dissolution, signature: dissolutionSignature })).status, 200);
